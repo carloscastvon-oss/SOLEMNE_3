@@ -16,3 +16,6 @@ __pycache__/
 
 # Contiene las claves de Supabase
 NOTAS CRDCLS.txt
+
+# Documentación solo local
+README.md
