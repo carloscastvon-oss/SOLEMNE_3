@@ -1,0 +1,12 @@
+# Credenciales: nunca se versionan
+.streamlit/secrets.toml
+KEYS.txt
+.env
+
+# Entorno y temporales
+.venv/
+__pycache__/
+*.pyc
+
+# Enunciado de la evaluación (documento de la institución, no es código)
+*.pdf

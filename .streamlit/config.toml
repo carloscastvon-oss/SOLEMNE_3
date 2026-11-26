@@ -1,0 +1,7 @@
+[client]
+# No exponer trazas internas ni herramientas de desarrollo al usuario final.
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
