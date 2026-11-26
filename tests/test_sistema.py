@@ -171,6 +171,21 @@ class TestEstructurasYAlgoritmos(unittest.TestCase):
         ranking = reportes.ranking_perdidas([{"perdida": 1}, {"perdida": 9}, {"perdida": 5}], 2)
         self.assertEqual([f["perdida"] for f in ranking], [9, 5])
 
+    # --- Datos de los gráficos ---
+    def test_datos_de_graficos(self):
+        registros = [
+            {"orden": 2, "fecha": "2026-01-02", "menu": "B", "comensales": 4,
+             "costo_total": 200.0, "perdida_merma": 20.0, "venta_total": 250.0},
+            {"orden": 1, "fecha": "2026-01-01", "menu": "A", "comensales": 4,
+             "costo_total": 100.0, "perdida_merma": 10.0, "venta_total": 125.0},
+        ]
+        partes = reportes.composicion_ingresos(reportes.calcular_kpis(registros))
+        self.assertEqual([p["monto"] for p in partes], [270.0, 30.0, 75.0])
+        self.assertAlmostEqual(sum(p["porcentaje"] for p in partes), 100.0)
+        evolucion = reportes.evolucion_acumulada(registros)
+        self.assertEqual([f["orden"] for f in evolucion], [1, 2])
+        self.assertEqual([f["ingresos"] for f in evolucion], [125.0, 375.0])
+
     # --- Indicadores sin registros ---
     def test_kpis_sin_datos(self):
         self.assertEqual(reportes.calcular_kpis([])["porcentaje_merma"], 0.0)

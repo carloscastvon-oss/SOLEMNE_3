@@ -1,5 +1,6 @@
 # --- IMPORTACIONES ---
 from algoritmos.busqueda import busqueda_secuencial_todos               # búsqueda secuencial propia
+from algoritmos.ordenamiento import mergesort  # ordenamiento propio
 from estructuras.tda import ArbolBinarioBusqueda, ColaPrioridad, Grafo  # árbol, cola con prioridad y grafo
 from logica.formato import numero                                       # formato de números
 from logica.motor_calculo import calcular_orden                         # motor de cálculo
@@ -74,6 +75,37 @@ def calcular_kpis(registros: list) -> dict:
         100 * kpis["perdida_merma"] / kpis["costo_total"] if kpis["costo_total"] else 0.0
     )
     return kpis
+
+
+# --- COMPOSICIÓN DE LOS INGRESOS ---
+def composicion_ingresos(kpis: dict) -> list[dict]:
+    partes = [  # las tres partes suman el ingreso proyectado
+        ("Costo aprovechado", kpis["costo_total"] - kpis["perdida_merma"]),
+        ("Pérdida por merma", kpis["perdida_merma"]),
+        ("Ganancia proyectada", kpis["ganancia"]),
+    ]
+    total = kpis["ingresos"]
+    return [
+        {"concepto": nombre, "monto": monto, "porcentaje": 100 * monto / total if total else 0.0}
+        for nombre, monto in partes
+    ]
+
+
+# --- EVOLUCIÓN ACUMULADA POR SERVICIO ---
+def evolucion_acumulada(registros: list) -> list[dict]:
+    cronologico = mergesort(registros, clave=lambda r: (r["fecha"], r["orden"]))  # del más antiguo al más nuevo
+    filas, ingresos, costo, merma = [], 0.0, 0.0, 0.0                             # acumuladores
+    for posicion, r in enumerate(cronologico, start=1):
+        ingresos += r["venta_total"]
+        costo += r["costo_total"]
+        merma += r["perdida_merma"]
+        filas.append(
+            {
+                "servicio": posicion, "orden": r["orden"], "menu": r["menu"],
+                "ingresos": ingresos, "costo": costo, "merma": merma,
+            }
+        )
+    return filas
 
 
 # --- FILTRO POR MENÚ ---

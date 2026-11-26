@@ -40,7 +40,7 @@ def _grafico_barras(filas: list, categoria: str, valor: str, titulo_valor: str) 
         alt.Chart(datos)
         .mark_bar()  # tipo de gráfico: barras
         .encode(
-            x=alt.X(f"{valor}:Q", title=titulo_valor),                                        # eje horizontal: valores
+            x=alt.X(f"{valor}:Q", title=titulo_valor, axis=alt.Axis(labelExpr=EJE_PESOS)),   # eje horizontal: valores
             y=alt.Y(f"{categoria}:N", sort=None, title=None, axis=alt.Axis(labelLimit=260)),  # eje vertical: nombres, en el orden recibido
             tooltip=[  # detalle al pasar el cursor
                 alt.Tooltip(f"{categoria}:N", title="Nombre"),
@@ -50,6 +50,133 @@ def _grafico_barras(filas: list, categoria: str, valor: str, titulo_valor: str) 
         .properties(height=max(120, 34 * len(datos)))  # altura según la cantidad de barras
     )
     st.altair_chart(grafico, width="stretch")  # muestra el gráfico
+
+
+# --- COLORES DE LOS GRÁFICOS (azul: costo, naranja: merma, verde agua: ganancia e ingresos) ---
+COLORES = {
+    "light": {"costo": "#257de0", "merma": "#f47230", "ganancia": "#00b894", "texto": "#31333f", "fondo": "#ffffff"},
+    "dark": {"costo": "#338ced", "merma": "#e76624", "ganancia": "#00a888", "texto": "#fafafa", "fondo": "#0e1117"},
+}
+
+
+# --- COLORES SEGÚN EL TEMA ---
+def _colores() -> dict:
+    return COLORES["dark" if st.context.theme.type == "dark" else "light"]  # tema claro u oscuro
+
+
+# --- FORMATO DE LOS MONTOS EN LOS EJES ---
+EJE_PESOS = "replace(format(datum.value, ',.0f'), /,/g, '.')"  # miles separados con punto
+
+
+# --- ESCALA DE COLOR CON LEYENDA ---
+def _escala_color(campo: str, nombres: list, colores: list, direccion: str = "horizontal"):
+    return alt.Color(
+        f"{campo}:N",
+        scale=alt.Scale(domain=nombres, range=colores),  # cada concepto mantiene su color
+        legend=alt.Legend(orient="bottom", direction=direccion, title=None, labelLimit=220),
+    )
+
+
+# --- GRÁFICO DE TORTA: DISTRIBUCIÓN DE LOS INGRESOS ---
+def _grafico_torta(partes: list) -> None:
+    c = _colores()
+    datos = pd.DataFrame(partes)
+    datos["orden"] = range(len(datos))                                  # orden fijo de las porciones
+    datos["etiqueta"] = [_porcentaje(p["porcentaje"]) for p in partes]  # porcentaje visible
+    datos["monto_texto"] = [pesos(p["monto"]) for p in partes]          # monto en formato chileno
+    base = alt.Chart(datos).encode(
+        theta=alt.Theta("monto:Q", stack=True),
+        order=alt.Order("orden:Q"),
+        tooltip=[
+            alt.Tooltip("concepto:N", title="Concepto"),
+            alt.Tooltip("monto_texto:N", title="Monto"),
+            alt.Tooltip("etiqueta:N", title="Del ingreso"),
+        ],
+    )
+    porciones = base.mark_arc(innerRadius=55, outerRadius=105, stroke=c["fondo"], strokeWidth=2).encode(
+        color=_escala_color("concepto", list(datos["concepto"]), [c["costo"], c["merma"], c["ganancia"]], "vertical")
+    )
+    etiquetas = base.mark_text(radius=130, fontSize=13).encode(  # porcentajes fuera de la torta
+        text="etiqueta:N", color=alt.value(c["texto"])
+    )
+    st.altair_chart((porciones + etiquetas).properties(height=360), width="stretch")
+
+
+# --- GRÁFICO DE BARRAS APILADAS: COSTO Y MERMA POR MENÚ ---
+def _grafico_costo_menu(por_menu: list) -> None:
+    c = _colores()
+    filas = []
+    for m in por_menu:  # cada barra se divide en costo aprovechado y merma
+        tramos = [("Costo aprovechado", m["costo"] - m["perdida"]), ("Pérdida por merma", m["perdida"])]
+        for posicion, (concepto, monto) in enumerate(tramos):
+            filas.append(
+                {"menu": m["menu"], "concepto": concepto, "orden": posicion,
+                 "monto": monto, "monto_texto": pesos(monto), "total": pesos(m["costo"])}
+            )
+    nombres = [m["menu"] for m in por_menu]  # conserva el orden de mayor a menor costo
+    grafico = (
+        alt.Chart(pd.DataFrame(filas))
+        .mark_bar(size=18, stroke=c["fondo"], strokeWidth=1)
+        .encode(
+            x=alt.X("monto:Q", title="Costo acumulado ($)", axis=alt.Axis(labelExpr=EJE_PESOS, tickCount=6)),
+            y=alt.Y("menu:N", sort=nombres, title=None, axis=alt.Axis(labelLimit=210, labelOverlap=False)),  # muestra todos los nombres
+            color=_escala_color("concepto", ["Costo aprovechado", "Pérdida por merma"], [c["costo"], c["merma"]]),
+            order=alt.Order("orden:Q"),
+            tooltip=[
+                alt.Tooltip("menu:N", title="Menú"),
+                alt.Tooltip("concepto:N", title="Concepto"),
+                alt.Tooltip("monto_texto:N", title="Monto"),
+                alt.Tooltip("total:N", title="Costo total del menú"),
+            ],
+        )
+        .properties(height=max(360, 34 * len(nombres) + 120))  # espacio para barras, eje y leyenda
+    )
+    st.altair_chart(grafico, width="stretch")
+
+
+# --- GRÁFICO DE LÍNEAS: EVOLUCIÓN ACUMULADA ---
+def _grafico_lineas(evolucion: list) -> None:
+    c = _colores()
+    series = {"ingresos": "Ingresos proyectados", "costo": "Costo de operación", "merma": "Pérdida por merma"}
+    filas = [
+        {"servicio": f["servicio"], "serie": titulo, "monto": f[clave]}
+        for f in evolucion
+        for clave, titulo in series.items()
+    ]
+    eje_x = alt.X(
+        "servicio:Q", title="Servicios en orden cronológico",
+        axis=alt.Axis(format="d", tickMinStep=1), scale=alt.Scale(zero=False, nice=False, padding=12),
+    )
+    lineas = (
+        alt.Chart(pd.DataFrame(filas))
+        .mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=64, filled=True))
+        .encode(
+            x=eje_x,
+            y=alt.Y("monto:Q", title="Monto acumulado ($)", axis=alt.Axis(labelExpr=EJE_PESOS)),
+            color=_escala_color("serie", list(series.values()), [c["ganancia"], c["costo"], c["merma"]]),
+        )
+    )
+    detalle = pd.DataFrame(evolucion)
+    for clave in series:  # montos formateados para el detalle emergente
+        detalle[f"{clave}_texto"] = [pesos(v) for v in detalle[clave]]
+    cursor = alt.selection_point(fields=["servicio"], nearest=True, on="pointerover", empty=False)  # sigue al puntero
+    guia = (
+        alt.Chart(detalle)
+        .mark_rule(color=c["texto"], strokeWidth=8)
+        .encode(
+            x=eje_x,
+            opacity=alt.condition(cursor, alt.value(0.15), alt.value(0)),  # solo visible bajo el puntero
+            tooltip=[
+                alt.Tooltip("orden:Q", title="Orden N°"),
+                alt.Tooltip("menu:N", title="Menú"),
+                alt.Tooltip("ingresos_texto:N", title="Ingresos acumulados"),
+                alt.Tooltip("costo_texto:N", title="Costo acumulado"),
+                alt.Tooltip("merma_texto:N", title="Merma acumulada"),
+            ],
+        )
+        .add_params(cursor)
+    )
+    st.altair_chart((lineas + guia).properties(height=320), width="stretch")
 
 
 # --- PANTALLA: RESUMEN EJECUTIVO ---
@@ -79,8 +206,39 @@ def pagina_resumen() -> None:
 
     por_menu = reportes.perdida_por_menu(registros)                               # totales por menú
     ordenado = quicksort(por_menu, clave=lambda f: f["costo"], descendente=True)  # ordena de mayor a menor costo
-    st.subheader("Costo acumulado por menú")
-    _grafico_barras(ordenado, "menu", "costo", "Costo acumulado ($)")
+    partes = reportes.composicion_ingresos(kpis)         # datos de la torta
+    evolucion = reportes.evolucion_acumulada(registros)  # datos de las líneas
+
+    columna_torta, columna_barras = st.columns([2, 3], gap="large")  # dos gráficos lado a lado
+    with columna_torta:
+        st.subheader("Distribución de los ingresos")
+        _grafico_torta(partes)
+    with columna_barras:
+        st.subheader("Costo y merma por menú")
+        _grafico_costo_menu(ordenado)
+
+    st.subheader("Evolución acumulada")  # gráfico a todo el ancho
+    _grafico_lineas(evolucion)
+    if len(evolucion) < 2:  # con un solo punto no se forma una línea
+        st.caption("Las líneas se forman a partir del segundo servicio registrado.")
+
+    with st.expander("Ver los datos de los gráficos"):  # los mismos valores en tablas
+        tabla(
+            partes,
+            {"concepto": "Concepto", "monto": "Monto", "porcentaje": "% del ingreso"},
+            {"monto": pesos, "porcentaje": _porcentaje},
+        )
+        tabla(
+            ordenado,
+            {"menu": "Menú", "costo": "Costo", "perdida": "Pérdida por merma"},
+            {"costo": pesos, "perdida": pesos},
+        )
+        tabla(
+            evolucion,
+            {"orden": "Orden N°", "menu": "Menú", "ingresos": "Ingresos acumulados",
+             "costo": "Costo acumulado", "merma": "Merma acumulada"},
+            {"ingresos": pesos, "costo": pesos, "merma": pesos},
+        )
 
 
 # --- PANTALLA: HISTORIAL DE PREPARACIONES ---

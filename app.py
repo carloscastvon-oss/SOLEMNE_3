@@ -1,12 +1,12 @@
 """
- Archivo      : app.py  (punto de entrada principal, el resto del codigo se encuentra en modulos)
+ Archivo      : app.py  (punto de entrada principal, el resto del código se encuentra en módulos)
  Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
  Alumno       : Capitán Carlos Castillo Von-bischoffshausen
  Curso        : I CRIM Sistemas de Armas - Programación Avanzada
  Institución  : Academia Politécnica Militar
  Profesor     : Dr. Carlos Santibáñez Rodríguez
  Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : streamlit (interfaz gráfica verisón web)
+ Librerías    : streamlit (interfaz gráfica versión web)
                 supabase  (conexión a las tablas de la base de datos)
                 pandas    (manejo de tablas de datos)
                 altair    (gráficos)
