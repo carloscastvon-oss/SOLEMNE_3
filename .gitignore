@@ -8,7 +8,7 @@ KEYS.txt
 __pycache__/
 *.pyc
 
-# Enunciado de la evaluación (documento de la institución, no es código)
+# Documentos PDF (no forman parte del código)
 *.pdf
 
 # Respaldo local de versiones anteriores

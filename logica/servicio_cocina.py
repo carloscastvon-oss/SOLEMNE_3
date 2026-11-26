@@ -1,27 +1,26 @@
-from estructuras.tda import Cola
-from logica.formato import cantidad
-from logica.motor_calculo import calcular_orden
-from modelos.entidades import Ingrediente, LineaPreparacion, OrdenPreparacion, Receta
+# --- IMPORTACIONES ---
+from estructuras.tda import Cola  # cola propia
+from logica.formato import cantidad  # formato de cantidades
+from logica.motor_calculo import calcular_orden                                        # motor de cálculo
+from modelos.entidades import Ingrediente, LineaPreparacion, OrdenPreparacion, Receta  # clases del sistema
 
 
-# Traduce un cálculo a la línea que lee cocina: solo cantidades.
+# --- LÍNEA DE PREPARACIÓN PARA COCINA ---
 def crear_linea(ingrediente: Ingrediente, raciones, unidades: int) -> LineaPreparacion:
     nombre_racion = ingrediente.nombre_racion
-    # Singular: "1 porción", "1 huevo", "1 tuto".
-    singular = "porción" if nombre_racion == "porciones" else nombre_racion.rstrip("s")
+    singular = "porción" if nombre_racion == "porciones" else nombre_racion.rstrip("s")  # nombre de la ración en singular
     return LineaPreparacion(
         ingrediente=ingrediente.nombre,
-        a_preparar=cantidad(raciones, singular, nombre_racion),
-        a_retirar=cantidad(unidades, ingrediente.unidad_compra, ingrediente.unidad_compra_plural),
+        a_preparar=cantidad(raciones, singular, nombre_racion),                                     # raciones o piezas a preparar
+        a_retirar=cantidad(unidades, ingrediente.unidad_compra, ingrediente.unidad_compra_plural),  # unidades completas a retirar
     )
 
 
+# --- SOLICITUD DE UN SERVICIO ---
 def solicitar_servicio(repositorio, receta: Receta, comensales, perfil: str) -> OrdenPreparacion:
-    """Valida, calcula, guarda en Supabase y retorna solo la vista operativa."""
-    resultado = calcular_orden(receta, comensales)  # lanza ErrorValidacion
-    # Se guardan todos los cálculos, aunque cocina no los vea.
-    numero = repositorio.registrar_orden(resultado, perfil)
-    return OrdenPreparacion(
+    resultado = calcular_orden(receta, comensales)           # valida y calcula
+    numero = repositorio.registrar_orden(resultado, perfil)  # guarda todos los cálculos y obtiene el número
+    return OrdenPreparacion(                                 # entrega a cocina solo las cantidades
         numero=numero,
         menu=receta.nombre,
         comensales=resultado.comensales,
@@ -32,15 +31,11 @@ def solicitar_servicio(repositorio, receta: Receta, comensales, perfil: str) -> 
     )
 
 
+# --- COLA DE ÓRDENES PENDIENTES ---
 def cola_de_pendientes(filas: list, ingredientes: list) -> Cola:
-    """
-    Encola las órdenes pendientes en orden de llegada: la cocina atiende primero
-    la más antigua (FIFO).
-    """
-    # Índice para recuperar el ingrediente por su identificador.
-    por_id = {i.id: i for i in ingredientes}
-    cola: Cola = Cola()
-    for fila in filas:
+    por_id = {i.id: i for i in ingredientes}  # ingredientes indexados por identificador
+    cola: Cola = Cola()                       # la orden más antigua se atiende primero
+    for fila in filas:                        # las filas vienen en orden de llegada
         cola.encolar(
             OrdenPreparacion(
                 numero=fila["id"],

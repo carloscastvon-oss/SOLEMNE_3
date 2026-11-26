@@ -1,21 +1,17 @@
-from algoritmos.busqueda import busqueda_secuencial_todos
-from estructuras.tda import ArbolBinarioBusqueda, ColaPrioridad, Grafo
-from logica.formato import numero
-from logica.motor_calculo import calcular_orden
+# --- IMPORTACIONES ---
+from algoritmos.busqueda import busqueda_secuencial_todos               # búsqueda secuencial propia
+from estructuras.tda import ArbolBinarioBusqueda, ColaPrioridad, Grafo  # árbol, cola con prioridad y grafo
+from logica.formato import numero                                       # formato de números
+from logica.motor_calculo import calcular_orden                         # motor de cálculo
 
 
+# --- PREPARACIÓN DE LOS REGISTROS ---
 def aplanar_ordenes(filas: list) -> list[dict]:
-    """
-    Convierte la respuesta anidada de Supabase en registros planos. Solo usa
-    tipos compatibles con JSON para poder aplicar el ordenamiento externo.
-    """
-    registros = []
+    registros = []  # lista de órdenes simplificadas
     for fila in filas:
         detalle = []
-        for d in fila["orden_detalle"]:
-            # La relación detalle-merma es 1 a 1: la API la entrega como objeto
-            # (o como lista de un elemento, según detecte la relación).
-            merma = d["mermas"][0] if isinstance(d["mermas"], list) else d["mermas"]
+        for d in fila["orden_detalle"]:  # procesa cada ingrediente de la orden
+            merma = d["mermas"][0] if isinstance(d["mermas"], list) else d["mermas"]  # la merma puede venir como objeto o como lista
             ingrediente = d["ingredientes"]
             detalle.append(
                 {
@@ -31,8 +27,7 @@ def aplanar_ordenes(filas: list) -> list[dict]:
                     "perdida": float(merma["perdida"]),
                 }
             )
-        # Un registro por orden, con su detalle incluido.
-        registros.append(
+        registros.append(  # agrega la orden con su detalle
             {
                 "orden": fila["id"],
                 "fecha": fila["creado_en"],
@@ -52,59 +47,53 @@ def aplanar_ordenes(filas: list) -> list[dict]:
     return registros
 
 
+# --- DESCRIPCIÓN DE LA MERMA FÍSICA ---
 def describir_merma(detalle: list) -> str:
-    """
-    La merma física tiene unidades distintas (kg, litros, paquetes): no se puede
-    sumar en un solo número, por eso se describe ingrediente por ingrediente.
-    """
-    partes = [
+    partes = [  # detalle por ingrediente, porque las unidades difieren
         f"{d['ingrediente']}: {numero(d['cantidad_merma'], 3)} {d['unidad']}"
         for d in detalle
-        if d["cantidad_merma"] > 0
+        if d["cantidad_merma"] > 0  # solo los ingredientes con sobrante
     ]
     return "; ".join(partes) if partes else "Sin merma"
 
 
+# --- INDICADORES GLOBALES ---
 def calcular_kpis(registros: list) -> dict:
-    """Indicadores globales (una sola pasada por los registros)."""
-    kpis = {
+    kpis = {  # acumuladores en cero
         "servicios": 0, "comensales": 0, "costo_total": 0.0,
         "perdida_merma": 0.0, "ingresos": 0.0,
     }
-    for r in registros:
+    for r in registros:  # suma los datos de cada orden
         kpis["servicios"] += 1
         kpis["comensales"] += r["comensales"]
         kpis["costo_total"] += r["costo_total"]
         kpis["perdida_merma"] += r["perdida_merma"]
         kpis["ingresos"] += r["venta_total"]
-    # Ganancia proyectada: ingresos menos costo de operación.
-    kpis["ganancia"] = kpis["ingresos"] - kpis["costo_total"]
-    # Se protege la división cuando todavía no hay servicios.
-    kpis["porcentaje_merma"] = (
+    kpis["ganancia"] = kpis["ingresos"] - kpis["costo_total"]  # ingresos menos costos
+    kpis["porcentaje_merma"] = (                               # evita dividir por cero
         100 * kpis["perdida_merma"] / kpis["costo_total"] if kpis["costo_total"] else 0.0
     )
     return kpis
 
 
+# --- FILTRO POR MENÚ ---
 def filtrar_por_menu(registros: list, menus: list) -> list:
-    """Búsqueda secuencial. Si no se elige ningún menú, se muestran todos."""
-    if not menus:
+    if not menus:  # sin selección se muestran todos
         return list(registros)
     return busqueda_secuencial_todos(registros, lambda r: r["menu"] in menus)
 
 
+# --- FILTRO POR RANGO DE PÉRDIDA ---
 def filtrar_por_rango_perdida(registros: list, minimo: float, maximo: float) -> list:
-    """Indexa las órdenes en un árbol binario por pérdida y consulta el rango."""
-    arbol = ArbolBinarioBusqueda()
+    arbol = ArbolBinarioBusqueda()  # árbol ordenado por pérdida
     for registro in registros:
         arbol.insertar(registro["perdida_merma"], registro)
-    return arbol.rango(minimo, maximo)
+    return arbol.rango(minimo, maximo)  # órdenes dentro del rango
 
 
-# Pérdida total, promedio y porcentaje de merma de cada menú.
+# --- PÉRDIDA ACUMULADA POR MENÚ ---
 def perdida_por_menu(registros: list) -> list[dict]:
-    # Agrupa las órdenes por menú y acumula sus montos.
-    acumulado: dict = {}
+    acumulado: dict = {}  # un total por cada menú
     for r in registros:
         fila = acumulado.setdefault(
             r["menu"], {"menu": r["menu"], "servicios": 0, "costo": 0.0, "perdida": 0.0}
@@ -112,18 +101,17 @@ def perdida_por_menu(registros: list) -> list[dict]:
         fila["servicios"] += 1
         fila["costo"] += r["costo_total"]
         fila["perdida"] += r["perdida_merma"]
-    for fila in acumulado.values():
+    for fila in acumulado.values():  # calcula promedios y porcentajes
         fila["perdida_promedio"] = fila["perdida"] / fila["servicios"]
         fila["porcentaje_merma"] = 100 * fila["perdida"] / fila["costo"]
     return list(acumulado.values())
 
 
-# Merma física, dinero perdido y porcentaje de cada ingrediente.
+# --- PÉRDIDA ACUMULADA POR INGREDIENTE ---
 def perdida_por_ingrediente(registros: list) -> list[dict]:
-    # Agrupa el detalle de todas las órdenes por ingrediente.
-    acumulado: dict = {}
+    acumulado: dict = {}  # un total por cada ingrediente
     for r in registros:
-        for d in r["detalle"]:
+        for d in r["detalle"]:  # recorre los ingredientes de cada orden
             fila = acumulado.setdefault(
                 d["ingrediente"],
                 {
@@ -134,59 +122,50 @@ def perdida_por_ingrediente(registros: list) -> list[dict]:
             fila["merma_fisica"] += d["cantidad_merma"]
             fila["compra"] += d["costo_total"]
             fila["perdida"] += d["perdida"]
-    for fila in acumulado.values():
+    for fila in acumulado.values():  # porcentaje perdido de lo comprado
         fila["porcentaje_merma"] = 100 * fila["perdida"] / fila["compra"]
     return list(acumulado.values())
 
 
+# --- RANKING DE PÉRDIDAS ---
 def ranking_perdidas(filas: list, limite: int | None = None) -> list:
-    """
-    Jerarquiza por pérdida usando la cola con prioridad: se extrae siempre la
-    mayor. Para un "Top k" no es necesario ordenar el resto de los datos.
-    """
-    cola: ColaPrioridad = ColaPrioridad(prioridad=lambda f: f["perdida"], mayor_primero=True)
+    cola: ColaPrioridad = ColaPrioridad(prioridad=lambda f: f["perdida"], mayor_primero=True)  # sale primero la pérdida mayor
     for fila in filas:
         cola.insertar(fila)
-    limite = len(cola) if limite is None else min(limite, len(cola))
-    return [cola.extraer() for _ in range(limite)]
+    limite = len(cola) if limite is None else min(limite, len(cola))  # cantidad de posiciones a entregar
+    return [cola.extraer() for _ in range(limite)]                    # extrae en orden de mayor a menor
 
 
+# --- GRAFO DE MENÚS E INGREDIENTES ---
 def construir_grafo(recetas: list) -> Grafo:
-    """
-    Grafo bipartito menú <-> ingrediente. Los vértices son tuplas (tipo, nombre)
-    para que un menú y un ingrediente nunca se confundan.
-    """
     grafo = Grafo()
     for receta in recetas:
         for item in receta.items:
-            grafo.agregar_arista(("menu", receta.nombre), ("ingrediente", item.ingrediente.nombre))
+            grafo.agregar_arista(("menu", receta.nombre), ("ingrediente", item.ingrediente.nombre))  # conecta cada menú con sus ingredientes
     return grafo
 
 
-# Los vecinos de un ingrediente en el grafo son los menús que lo usan.
+# --- MENÚS QUE USAN UN INGREDIENTE ---
 def menus_que_usan(grafo: Grafo, ingrediente: str) -> list[str]:
-    return [nombre for _, nombre in grafo.vecinos(("ingrediente", ingrediente))]
+    return [nombre for _, nombre in grafo.vecinos(("ingrediente", ingrediente))]  # son los vecinos del ingrediente
 
 
+# --- MENÚS CON INGREDIENTES EN COMÚN ---
 def menus_relacionados(grafo: Grafo, menu: str) -> list[dict]:
-    """Menús a distancia 2 (comparten al menos un ingrediente) con los comunes."""
-    propios = {nombre for _, nombre in grafo.vecinos(("menu", menu))}
+    propios = {nombre for _, nombre in grafo.vecinos(("menu", menu))}  # ingredientes del menú elegido
     relacionados = []
-    for vertice in grafo.a_distancia(("menu", menu), 2):
-        comunes = [n for _, n in grafo.vecinos(vertice) if n in propios]
+    for vertice in grafo.a_distancia(("menu", menu), 2):                  # a distancia 2 están los menús relacionados
+        comunes = [n for _, n in grafo.vecinos(vertice) if n in propios]  # ingredientes que comparten
         relacionados.append(
             {"menu": vertice[1], "compartidos": len(comunes), "ingredientes": ", ".join(comunes)}
         )
     return relacionados
 
 
+# --- SIMULACIÓN COMPARATIVA DE MENÚS ---
 def comparativo_teorico(recetas: list, comensales: int) -> list[dict]:
-    """
-    Simula todos los menús para la misma cantidad de comensales (no se guarda
-    nada). Sirve para elegir el menú que desperdicia menos.
-    """
     filas = []
-    for receta in recetas:
+    for receta in recetas:  # calcula cada menú sin guardar
         r = calcular_orden(receta, comensales)
         filas.append(
             {

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Alumno** | [NOMBRE DEL ALUMNO] |
+| **Alumno** | CAPITÁN CARLOS CASTILLO VON-BISCHOFFSHAUSEN |
 | **Curso** | I CRIM Sistemas de Armas, Programación Avanzada |
 | **Institución** | Academia Politécnica Militar |
 | **Profesor** | Dr. Carlos Santibáñez Rodríguez |
@@ -47,8 +47,8 @@ La protección de la información en cocina tiene tres niveles:
 2. Cocina recibe un objeto `OrdenPreparacion`, que no tiene atributos financieros.
 3. La consulta de órdenes de cocina no pide columnas de costo ni de merma.
 
-**Alcance:** por definición del encargo no se gestionan contraseñas; la persona se
-identifica eligiendo su perfil. Esto separa las vistas, pero no impide que alguien
+**Alcance:** el sistema no gestiona contraseñas; la persona se identifica
+eligiendo su perfil. Esto separa las vistas, pero no impide que alguien
 elija "Administrador". Un sistema real requeriría autenticación.
 
 ## 3. Estructura
@@ -103,16 +103,14 @@ Para cada ingrediente, con N comensales:
 
 Costo total $4.200; costo por plato $1.050; **venta por plato $1.312,5**; pérdida $1.100.
 
-### Supuestos
+### Criterios de cálculo
 
-- La columna **Utilidad** define cuántas personas cubre cada unidad de compra.
-  Las cantidades del recetario ("6 unidades" de papa) se muestran como referencia,
-  porque la tabla no indica cuántas papas o tomates tiene un kilo.
-  Lo mismo aplica a la lechuga: rinde 10 personas, según la tabla.
-- **Cebolla:** rinde 4 personas, por indicación del encargo (la tabla impresa dice 2).
+- **Rendimiento:** cada ingrediente define cuántas personas cubre una unidad de compra.
+  Las cantidades de la receta ("6 unidades" de papa) se muestran como referencia,
+  porque el sistema no registra cuántas papas o tomates tiene un kilo.
+  Por ejemplo, la cebolla rinde 4 personas y la lechuga, 10.
 - **Huevo:** como el empaque trae 12 unidades contables, se usa la cantidad de cada
   receta (6 en la tortilla y 4 en las demás, por cada 4 comensales).
-- **Carne Molida con Papas:** sin arroz.
 - **Productos indivisibles:** nada abierto se guarda; la merma se calcula por orden.
 - **Ganancia del 25 %:** es un recargo sobre el costo.
 - La pérdida por merma ya forma parte del costo; no se suma dos veces.
@@ -120,7 +118,7 @@ Costo total $4.200; costo por plato $1.050; **venta por plato $1.312,5**; pérdi
 
 ## 6. Estructuras y algoritmos aplicados
 
-| Contenido | Dónde se usa |
+| Estructura o algoritmo | Dónde se usa |
 |---|---|
 | Lista enlazada | Ingredientes de cada `Receta` |
 | Pila (LIFO) | Órdenes de la sesión en cocina; QuickSort iterativo; recorrido del árbol |
@@ -134,11 +132,3 @@ Costo total $4.200; costo por plato $1.050; **venta por plato $1.312,5**; pérdi
 
 Los algoritmos de ordenamiento y las estructuras están implementados a mano.
 `sorted()` solo se usa en las pruebas, como referencia para comparar resultados.
-
-## 7. Entrega (GitHub o ZIP)
-
-**No incluir** `.streamlit/secrets.toml`, `KEYS.txt` ni `.venv/`.
-
-- En GitHub, `.gitignore` los excluye si se usa `git add`. La carga manual por la
-  página web no aplica `.gitignore`.
-- En un ZIP hay que excluirlos manualmente.

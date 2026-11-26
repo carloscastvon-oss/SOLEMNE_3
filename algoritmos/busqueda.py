@@ -1,32 +1,28 @@
-import unicodedata
-from typing import Callable, Iterable, Optional
+# --- IMPORTACIONES ---
+import unicodedata                               # tratamiento de tildes
+from typing import Callable, Iterable, Optional  # anotaciones de tipos
 
 
-# Se usa búsqueda secuencial, O(n): los catálogos son pequeños, no requieren
-# estar ordenados y permite coincidencias parciales de texto.
-
-
+# --- NORMALIZACIÓN DE TEXTO ---
 def normalizar(texto: str) -> str:
-    """Minúsculas y sin tildes, para que 'carne' o 'aceíte' coincidan igual."""
-    descompuesto = unicodedata.normalize("NFD", texto.strip().lower())
-    return "".join(c for c in descompuesto if unicodedata.category(c) != "Mn")
+    descompuesto = unicodedata.normalize("NFD", texto.strip().lower())          # pasa a minúsculas y separa las tildes
+    return "".join(c for c in descompuesto if unicodedata.category(c) != "Mn")  # elimina las tildes
 
 
+# --- BÚSQUEDA SECUENCIAL: PRIMERA COINCIDENCIA ---
 def busqueda_secuencial(elementos: Iterable, condicion: Callable) -> Optional[object]:
-    """Recorre uno a uno y retorna el PRIMER elemento que cumple, o None."""
-    for elemento in elementos:
+    for elemento in elementos:  # revisa uno por uno
         if condicion(elemento):
-            return elemento
-    return None
+            return elemento  # retorna el primero que cumple
+    return None              # no hubo coincidencias
 
 
+# --- BÚSQUEDA SECUENCIAL: TODAS LAS COINCIDENCIAS ---
 def busqueda_secuencial_todos(elementos: Iterable, condicion: Callable) -> list:
-    """Recorre toda la colección y retorna TODAS las coincidencias."""
-    return [elemento for elemento in elementos if condicion(elemento)]
+    return [elemento for elemento in elementos if condicion(elemento)]  # recorre toda la colección
 
 
+# --- BÚSQUEDA POR NOMBRE ---
 def buscar_por_nombre(elementos: Iterable, texto: str, nombre: Callable) -> list:
-    """Coincidencia parcial por nombre. Un texto vacío retorna todo."""
-    # Se normaliza lo buscado y cada nombre antes de comparar.
-    buscado = normalizar(texto)
+    buscado = normalizar(texto)  # admite parte del nombre, con o sin tildes
     return busqueda_secuencial_todos(elementos, lambda e: buscado in normalizar(nombre(e)))

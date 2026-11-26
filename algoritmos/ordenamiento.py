@@ -1,196 +1,157 @@
-import json
-import os
-import tempfile
-from typing import Any, Callable, Iterable, Iterator
+# --- IMPORTACIONES ---
+import json  # formato de los registros en disco
+import os  # manejo de archivos
+import tempfile                                       # archivos y carpetas temporales
+from typing import Any, Callable, Iterable, Iterator  # anotaciones de tipos
 
-from estructuras.tda import ColaPrioridad, Pila
+from estructuras.tda import ColaPrioridad, Pila  # estructuras propias de apoyo
 
-# Función que indica por qué dato se ordena cada elemento.
-Clave = Callable[[Any], Any]
-
-
-# Algoritmos implementados a mano. Criterio de elección:
-#   QuickSort : O(n log n) en promedio y poca memoria extra; no es estable.
-#   MergeSort : O(n log n) garantizado y estable; usa memoria O(n).
-#   Externo   : para historiales que no caben en memoria; ordena por bloques en
-#               disco y en la mezcla mantiene un registro por archivo.
+Clave = Callable[[Any], Any]  # función que indica por qué dato ordenar
 
 
+# --- COMPARACIÓN DE DOS ELEMENTOS ---
 def _va_antes(a, b, clave: Clave, descendente: bool) -> bool:
-    """True si `a` debe quedar estrictamente antes que `b`."""
-    return clave(a) > clave(b) if descendente else clave(a) < clave(b)
+    return clave(a) > clave(b) if descendente else clave(a) < clave(b)  # el sentido depende de si es descendente
 
 
-# ---------------------------------------------------------------------------
-# Ordenamiento interno
-# ---------------------------------------------------------------------------
+# --- ORDENAMIENTO INTERNO: QUICKSORT ---
 def quicksort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
-    """
-    QuickSort iterativo. Los subarreglos pendientes se guardan en una Pila
-    propia (en vez de recursión). El pivote es el elemento central, lo que
-    evita el peor caso cuando los datos ya vienen ordenados (algo habitual en
-    un historial por fecha). La partición de Hoare reparte bien los repetidos.
-    """
-    arreglo = list(datos)  # copia: no se modifica la entrada
-    pendientes: Pila = Pila()
-    pendientes.apilar((0, len(arreglo) - 1))
+    arreglo = list(datos)                     # copia para no modificar el original
+    pendientes: Pila = Pila()                 # tramos por ordenar (reemplaza la recursión)
+    pendientes.apilar((0, len(arreglo) - 1))  # se parte con el arreglo completo
 
     while not pendientes.esta_vacia():
         inicio, fin = pendientes.desapilar()
-        if inicio >= fin:  # 0 o 1 elemento: ya está ordenado
+        if inicio >= fin:  # tramo de 0 o 1 elemento: ya está ordenado
             continue
-        pivote = arreglo[(inicio + fin) // 2]
+        pivote = arreglo[(inicio + fin) // 2]  # elemento central como referencia
         i, j = inicio, fin
-        # Partición: lo que va antes del pivote queda a la izquierda.
-        while i <= j:
-            while _va_antes(arreglo[i], pivote, clave, descendente):
+        while i <= j:  # separa los elementos según el pivote
+            while _va_antes(arreglo[i], pivote, clave, descendente):  # avanza desde la izquierda
                 i += 1
-            while _va_antes(pivote, arreglo[j], clave, descendente):
+            while _va_antes(pivote, arreglo[j], clave, descendente):  # retrocede desde la derecha
                 j -= 1
             if i <= j:
-                arreglo[i], arreglo[j] = arreglo[j], arreglo[i]
+                arreglo[i], arreglo[j] = arreglo[j], arreglo[i]  # intercambia los que están en el lado equivocado
                 i += 1
                 j -= 1
-        # Las dos mitades quedan pendientes de ordenar.
-        pendientes.apilar((inicio, j))
-        pendientes.apilar((i, fin))
+        pendientes.apilar((inicio, j))  # tramo izquierdo pendiente
+        pendientes.apilar((i, fin))     # tramo derecho pendiente
     return arreglo
 
 
+# --- ORDENAMIENTO INTERNO: MERGESORT ---
 def mergesort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
-    """MergeSort recursivo y estable: divide en mitades y luego las mezcla."""
     arreglo = list(datos)
-    # Caso base de la recursión.
-    if len(arreglo) <= 1:
+    if len(arreglo) <= 1:  # caso base de la recursión
         return arreglo
-    medio = len(arreglo) // 2
-    izquierda = mergesort(arreglo[:medio], clave, descendente)
-    derecha = mergesort(arreglo[medio:], clave, descendente)
+    medio = len(arreglo) // 2                                   # punto de división
+    izquierda = mergesort(arreglo[:medio], clave, descendente)  # ordena la primera mitad
+    derecha = mergesort(arreglo[medio:], clave, descendente)    # ordena la segunda mitad
 
     resultado, i, j = [], 0, 0
-    while i < len(izquierda) and j < len(derecha):
-        # Ante empate se toma el de la izquierda: eso garantiza estabilidad.
-        if _va_antes(derecha[j], izquierda[i], clave, descendente):
+    while i < len(izquierda) and j < len(derecha):                   # mezcla las dos mitades ordenadas
+        if _va_antes(derecha[j], izquierda[i], clave, descendente):  # en un empate se toma primero la izquierda
             resultado.append(derecha[j])
             j += 1
         else:
             resultado.append(izquierda[i])
             i += 1
-    # Se agrega lo que haya sobrado de alguna de las dos mitades.
-    resultado.extend(izquierda[i:])
+    resultado.extend(izquierda[i:])  # agrega los elementos restantes
     resultado.extend(derecha[j:])
     return resultado
 
 
-# ---------------------------------------------------------------------------
-# Ordenamiento externo
-# ---------------------------------------------------------------------------
+# --- ESCRITURA DE UN BLOQUE EN DISCO ---
 def _escribir_bloque(registros: Iterable[dict], carpeta: str) -> str:
-    """Guarda registros en un archivo temporal, un JSON por línea."""
-    descriptor, ruta = tempfile.mkstemp(suffix=".jsonl", dir=carpeta)
+    descriptor, ruta = tempfile.mkstemp(suffix=".jsonl", dir=carpeta)  # crea un archivo temporal
     with os.fdopen(descriptor, "w", encoding="utf-8") as archivo:
-        for registro in registros:
+        for registro in registros:  # un registro en formato JSON por línea
             archivo.write(json.dumps(registro, ensure_ascii=False) + "\n")
     return ruta
 
 
+# --- LECTURA DE UN BLOQUE DESDE DISCO ---
 def _leer_bloque(ruta: str) -> Iterator[dict]:
-    """Lee un bloque línea a línea (no carga el archivo completo en memoria)."""
     with open(ruta, "r", encoding="utf-8") as archivo:
-        for linea in archivo:
+        for linea in archivo:  # lee línea por línea sin cargar todo en memoria
             yield json.loads(linea)
 
 
+# --- MEZCLA DE BLOQUES ORDENADOS ---
 def _fusionar(rutas: list, clave: Clave, descendente: bool) -> Iterator[dict]:
-    """
-    Mezcla k archivos ordenados. La cola con prioridad contiene solo el primer
-    registro disponible de cada archivo; siempre se entrega el que corresponde.
-    El desempate por número de archivo conserva la estabilidad.
-    """
-    lectores = [_leer_bloque(ruta) for ruta in rutas]
-    cabezas: ColaPrioridad = ColaPrioridad(
+    lectores = [_leer_bloque(ruta) for ruta in rutas]  # un lector por archivo
+    cabezas: ColaPrioridad = ColaPrioridad(            # contiene el siguiente registro de cada archivo
         prioridad=lambda t: (_Invertible(clave(t[0]), descendente), t[1])
     )
-    for indice, lector in enumerate(lectores):
+    for indice, lector in enumerate(lectores):  # carga el primer registro de cada archivo
         primero = next(lector, None)
         if primero is not None:
             cabezas.insertar((primero, indice))
 
-    while not cabezas.esta_vacia():
+    while not cabezas.esta_vacia():  # entrega siempre el que corresponde
         registro, indice = cabezas.extraer()
         yield registro
-        siguiente = next(lectores[indice], None)
+        siguiente = next(lectores[indice], None)  # repone desde el mismo archivo
         if siguiente is not None:
             cabezas.insertar((siguiente, indice))
 
 
+# --- CLAVE CON ORDEN INVERTIBLE ---
 class _Invertible:
-    """Envuelve una clave para poder invertir su orden (sirve también para texto)."""
 
-    __slots__ = ("valor", "invertir")
+    __slots__ = ("valor", "invertir")  # atributos fijos para ahorrar memoria
 
-    # Guarda la clave y si el orden debe invertirse.
+    # --- Crear la clave ---
     def __init__(self, valor, invertir: bool):
         self.valor = valor
         self.invertir = invertir
 
-    # "Menor que", invertido cuando el orden es descendente.
+    # --- Comparar "menor que" ---
     def __lt__(self, otro):
-        return otro.valor < self.valor if self.invertir else self.valor < otro.valor
+        return otro.valor < self.valor if self.invertir else self.valor < otro.valor  # invierte la comparación si es descendente
 
-    # "Mayor que" se define a partir de "menor que".
+    # --- Comparar "mayor que" ---
     def __gt__(self, otro):
         return otro.__lt__(self)
 
-    # Dos claves son iguales si sus valores lo son.
+    # --- Comparar igualdad ---
     def __eq__(self, otro):
         return self.valor == otro.valor
 
 
+# --- ORDENAMIENTO EXTERNO: MEZCLA EN DISCO ---
 def ordenamiento_externo(
     datos: Iterable[dict],
     clave: Clave,
     descendente: bool = False,
-    tam_bloque: int = 50,
-    max_archivos: int = 8,
+    tam_bloque: int = 50,   # registros que se ordenan en memoria a la vez
+    max_archivos: int = 8,  # archivos que se mezclan a la vez
 ) -> list:
-    """
-    External merge sort en dos fases:
-      1. Se leen `tam_bloque` registros, se ordenan en memoria y se escriben
-         como un bloque ordenado en disco.
-      2. Los bloques se fusionan en grupos de hasta `max_archivos` (para no
-         abrir demasiados archivos a la vez), repitiendo hasta terminar.
-    Los registros deben poder convertirse a JSON. La carpeta temporal se borra
-    automáticamente al finalizar, incluso si ocurre un error.
-    Se retorna una lista porque la interfaz necesita mostrar la tabla completa.
-    """
-    # Validación de parámetros para evitar ciclos sin avance.
-    if tam_bloque < 1 or max_archivos < 2:
+    if tam_bloque < 1 or max_archivos < 2:  # valida los parámetros
         raise ValueError("tam_bloque debe ser >= 1 y max_archivos >= 2")
 
-    with tempfile.TemporaryDirectory(prefix="orden_externo_") as carpeta:
-        # Fase 1: generación de bloques ordenados.
-        rutas, bloque = [], []
+    with tempfile.TemporaryDirectory(prefix="orden_externo_") as carpeta:  # la carpeta temporal se borra al terminar
+        rutas, bloque = [], []  # fase 1: crear bloques ordenados
         for registro in datos:
             bloque.append(registro)
-            if len(bloque) == tam_bloque:
+            if len(bloque) == tam_bloque:  # bloque lleno: se ordena y se guarda
                 rutas.append(_escribir_bloque(mergesort(bloque, clave, descendente), carpeta))
                 bloque = []
-        if bloque:
+        if bloque:  # guarda el último bloque incompleto
             rutas.append(_escribir_bloque(mergesort(bloque, clave, descendente), carpeta))
 
-        # Fase 2: pasadas de mezcla hasta que quepan en una sola fusión final.
-        while len(rutas) > max_archivos:
+        while len(rutas) > max_archivos:  # fase 2: mezclar por grupos
             nuevas = []
             for i in range(0, len(rutas), max_archivos):
                 grupo = rutas[i : i + max_archivos]
                 nuevas.append(_escribir_bloque(_fusionar(grupo, clave, descendente), carpeta))
             rutas = nuevas
 
-        return list(_fusionar(rutas, clave, descendente))
+        return list(_fusionar(rutas, clave, descendente))  # mezcla final
 
 
-# Catálogo de métodos disponibles para el selector de la interfaz.
+# --- MÉTODOS DISPONIBLES EN LA INTERFAZ ---
 METODOS = {
     "QuickSort (interno)": quicksort,
     "MergeSort (interno)": mergesort,

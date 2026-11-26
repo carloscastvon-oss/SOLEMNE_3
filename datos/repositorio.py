@@ -1,20 +1,18 @@
-from datetime import datetime, timezone
+# --- IMPORTACIONES ---
+from datetime import datetime, timezone  # fecha y hora
 
-from modelos.entidades import Ingrediente, ItemReceta, Receta, ResultadoCalculo
+from modelos.entidades import Ingrediente, ItemReceta, Receta, ResultadoCalculo  # clases del sistema
 
-# Esta es la única capa que consulta la base de datos.
 
-# La API de Supabase entrega como máximo 1000 filas por consulta.
-TAM_PAGINA = 1000
+# --- CONSTANTES DE CONSULTA ---
+TAM_PAGINA = 1000  # máximo de filas por consulta
 
-# Columnas que puede pedir COCINA: ninguna es financiera ni de merma. Así los
-# datos sensibles ni siquiera salen de la base de datos hacia esa vista.
-COLUMNAS_COCINA = (
+COLUMNAS_COCINA = (  # columnas para cocina, sin costos ni mermas
     "id, comensales, estado, creado_en, recetas(nombre), "
     "orden_detalle(id, ingrediente_id, raciones, unidades_completas)"
 )
 
-COLUMNAS_ADMIN = (
+COLUMNAS_ADMIN = (  # columnas completas para el administrador
     "id, comensales, estado, creado_en, costo_total, costo_por_plato, "
     "venta_por_plato, venta_total, perdida_merma, recetas(nombre), perfiles(nombre), "
     "orden_detalle(id, raciones, cantidad_requerida, unidades_completas, "
@@ -24,23 +22,22 @@ COLUMNAS_ADMIN = (
 )
 
 
-# Agrupa todas las lecturas y escrituras en Supabase.
+# --- CLASE DE ACCESO A LA BASE DE DATOS ---
 class Repositorio:
-    # Recibe el cliente de Supabase (facilita probar con uno simulado).
+    # --- Crear repositorio ---
     def __init__(self, cliente):
-        self._db = cliente
+        self._db = cliente  # cliente de Supabase
 
-    # ------------------------------------------------------------- Perfiles
-    # Perfiles junto con las vistas que cada uno puede abrir.
+    # --- Leer perfiles y permisos ---
     def obtener_perfiles(self) -> list[dict]:
-        filas = (
+        filas = (  # consulta los perfiles con sus vistas
             self._db.table("perfiles")
             .select("codigo, nombre, descripcion, perfil_permisos(vista)")
             .order("id")
             .execute()
             .data
         )
-        return [
+        return [  # simplifica el resultado
             {
                 "codigo": f["codigo"],
                 "nombre": f["nombre"],
@@ -50,31 +47,30 @@ class Repositorio:
             for f in filas
         ]
 
-    # ------------------------------------------------------------- Catálogo
-    # Cada fila se convierte en un objeto Ingrediente.
+    # --- Leer ingredientes ---
     def obtener_ingredientes(self) -> list[Ingrediente]:
         filas = self._db.table("ingredientes").select("*").order("id").execute().data
-        return [Ingrediente(**fila) for fila in filas]
+        return [Ingrediente(**fila) for fila in filas]  # convierte cada fila en un objeto
 
+    # --- Leer recetas ---
     def obtener_recetas(self, ingredientes: list[Ingrediente]) -> list[Receta]:
-        """Reconstruye los objetos Receta (con su lista enlazada de ítems)."""
-        por_id = {i.id: i for i in ingredientes}
-        filas = (
+        por_id = {i.id: i for i in ingredientes}  # ingredientes indexados por identificador
+        filas = (                                 # consulta las recetas con sus líneas
             self._db.table("recetas")
             .select(
                 "id, nombre, comensales_base, "
                 "receta_ingredientes(ingrediente_id, raciones_base, texto_receta, posicion)"
             )
             .order("id")
-            .order("posicion", foreign_table="receta_ingredientes")
+            .order("posicion", foreign_table="receta_ingredientes")  # respeta el orden del recetario
             .execute()
             .data
         )
         recetas = []
-        for fila in filas:
+        for fila in filas:  # construye cada objeto Receta
             receta = Receta(fila["id"], fila["nombre"], fila["comensales_base"])
             for linea in fila["receta_ingredientes"]:
-                receta.agregar_item(
+                receta.agregar_item(  # agrega los ingredientes a la receta
                     ItemReceta(
                         por_id[linea["ingrediente_id"]],
                         linea["raciones_base"],
@@ -84,14 +80,12 @@ class Repositorio:
             recetas.append(receta)
         return recetas
 
-    # ------------------------------------------------------------- Órdenes
+    # --- Guardar una orden completa ---
     def registrar_orden(self, resultado: ResultadoCalculo, perfil: str) -> int:
-        """Guarda la orden completa mediante la función transaccional (RPC)."""
-        orden = {
+        orden = {  # datos generales; los montos van como texto exacto
             "receta_id": resultado.receta.id,
             "perfil": perfil,
             "comensales": resultado.comensales,
-            # Decimal -> str: JSON no admite Decimal y str no pierde precisión.
             "costo_total": str(resultado.costo_total),
             "costo_por_plato": str(resultado.costo_por_plato),
             "venta_por_plato": str(resultado.venta_por_plato),
@@ -99,7 +93,7 @@ class Repositorio:
             "perdida_merma": str(resultado.perdida_merma),
             "margen": str(resultado.margen),
         }
-        detalle = [
+        detalle = [  # cálculo y merma de cada ingrediente
             {
                 "ingrediente_id": d.ingrediente.id,
                 "raciones": round(float(d.raciones), 4),
@@ -112,27 +106,27 @@ class Repositorio:
             }
             for d in resultado.detalles
         ]
-        respuesta = self._db.rpc(
+        respuesta = self._db.rpc(  # guarda todo en una sola transacción
             "registrar_orden", {"p_orden": orden, "p_detalle": detalle}
         ).execute()
-        return respuesta.data
+        return respuesta.data  # número de la orden creada
 
+    # --- Leer órdenes pendientes ---
     def ordenes_cocina_pendientes(self) -> list[dict]:
-        """Pendientes de la más antigua a la más nueva (orden de llegada)."""
         return self._paginar(
             lambda: self._db.table("ordenes_servicio")
             .select(COLUMNAS_COCINA)
-            .eq("estado", "pendiente")
-            .order("creado_en")
+            .eq("estado", "pendiente")  # solo las no preparadas
+            .order("creado_en")         # de la más antigua a la más nueva
             .order("id")
             .order("id", foreign_table="orden_detalle")
         )
 
+    # --- Marcar una orden como preparada ---
     def marcar_preparada(self, orden_id: int) -> bool:
-        """Retorna False si otra sesión ya la había marcado."""
         filas = (
             self._db.table("ordenes_servicio")
-            .update(
+            .update(  # cambia el estado y registra la hora
                 {
                     "estado": "preparada",
                     "preparado_en": datetime.now(timezone.utc).isoformat(),
@@ -143,10 +137,10 @@ class Repositorio:
             .execute()
             .data
         )
-        return bool(filas)
+        return bool(filas)  # False si ya estaba marcada
 
+    # --- Leer el historial completo ---
     def ordenes_completas(self) -> list[dict]:
-        """Historial con toda la información (solo para el administrador)."""
         return self._paginar(
             lambda: self._db.table("ordenes_servicio")
             .select(COLUMNAS_ADMIN)
@@ -154,13 +148,13 @@ class Repositorio:
             .order("id", foreign_table="orden_detalle")
         )
 
+    # --- Leer todas las páginas de resultados ---
     @staticmethod
     def _paginar(crear_consulta) -> list[dict]:
-        """Pide páginas de 1000 filas hasta traer todos los registros."""
-        filas, inicio = [], 0
+        filas, inicio = [], 0  # acumulador y posición inicial
         while True:
-            pagina = crear_consulta().range(inicio, inicio + TAM_PAGINA - 1).execute().data
+            pagina = crear_consulta().range(inicio, inicio + TAM_PAGINA - 1).execute().data  # pide el siguiente grupo de filas
             filas.extend(pagina)
-            if len(pagina) < TAM_PAGINA:
+            if len(pagina) < TAM_PAGINA:  # una página incompleta es la última
                 return filas
-            inicio += TAM_PAGINA
+            inicio += TAM_PAGINA  # avanza a la página siguiente

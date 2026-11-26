@@ -1,55 +1,50 @@
-begin;
+begin;  -- inicia la transacción
 
--- -----------------------------------------------------------------------------
--- 1. PERFILES Y PERMISOS (control de acceso por rol, sin claves de usuario)
--- -----------------------------------------------------------------------------
+-- --- TABLA DE PERFILES ---
 create table if not exists public.perfiles (
     id          smallint generated always as identity primary key,
-    codigo      text not null unique check (codigo in ('cocina', 'administrador')),
+    codigo      text not null unique check (codigo in ('cocina', 'administrador')),  -- identificador del perfil
     nombre      text not null,
     descripcion text not null
 );
 
--- Cada fila autoriza a un perfil a abrir una vista de la aplicación.
+-- --- TABLA DE PERMISOS ---
 create table if not exists public.perfil_permisos (
     perfil_id smallint not null references public.perfiles (id) on delete cascade,
-    vista     text     not null,
+    vista     text     not null,  -- pantalla autorizada
     primary key (perfil_id, vista)
 );
 
--- -----------------------------------------------------------------------------
--- 2. CATÁLOGO: INGREDIENTES Y RECETAS
--- -----------------------------------------------------------------------------
+-- --- TABLA DE INGREDIENTES ---
 create table if not exists public.ingredientes (
     id                   integer generated always as identity primary key,
     nombre               text    not null unique,
-    costo_unitario       integer not null check (costo_unitario > 0),
-    rendimiento          integer not null check (rendimiento > 0),  -- personas por unidad
+    costo_unitario       integer not null check (costo_unitario > 0),  -- precio por unidad de compra
+    rendimiento          integer not null check (rendimiento > 0),     -- personas por unidad
     unidad_compra        text    not null,
     unidad_compra_plural text    not null,
-    pieza_entera         boolean not null default false,
+    pieza_entera         boolean not null default false,  -- se usa por piezas completas
     nombre_racion        text    not null default 'porciones'
 );
 
+-- --- TABLA DE RECETAS ---
 create table if not exists public.recetas (
     id              integer generated always as identity primary key,
     nombre          text     not null unique,
-    comensales_base smallint not null default 4 check (comensales_base > 0)
+    comensales_base smallint not null default 4 check (comensales_base > 0)  -- personas que considera la receta
 );
 
--- Relación muchos a muchos entre recetas e ingredientes.
+-- --- TABLA DE INGREDIENTES POR RECETA ---
 create table if not exists public.receta_ingredientes (
     receta_id      integer  not null references public.recetas (id) on delete cascade,
     ingrediente_id integer  not null references public.ingredientes (id) on delete restrict,
-    raciones_base  integer  not null check (raciones_base > 0),
+    raciones_base  integer  not null check (raciones_base > 0),  -- raciones para la base de comensales
     texto_receta   text     not null,
-    posicion       smallint not null,
+    posicion       smallint not null,  -- orden dentro de la receta
     primary key (receta_id, ingrediente_id)
 );
 
--- -----------------------------------------------------------------------------
--- 3. OPERACIÓN: ÓRDENES DE SERVICIO, DETALLE DE INSUMOS Y MERMAS
--- -----------------------------------------------------------------------------
+-- --- TABLA DE ÓRDENES DE SERVICIO ---
 create table if not exists public.ordenes_servicio (
     id              bigint generated always as identity primary key,
     receta_id       integer       not null references public.recetas (id) on delete restrict,
@@ -61,13 +56,13 @@ create table if not exists public.ordenes_servicio (
     venta_total     numeric(14,2) not null check (venta_total >= 0),
     perdida_merma   numeric(14,2) not null check (perdida_merma >= 0),
     margen          numeric(5,2)  not null,
-    estado          text          not null default 'pendiente'
+    estado          text          not null default 'pendiente'  -- pendiente o preparada
                     check (estado in ('pendiente', 'preparada')),
     creado_en       timestamptz   not null default now(),
     preparado_en    timestamptz
 );
 
--- Se guarda el costo unitario vigente: si cambia el precio, el historial no cambia.
+-- --- TABLA DE DETALLE DE CADA ORDEN ---
 create table if not exists public.orden_detalle (
     id                 bigint generated always as identity primary key,
     orden_id           bigint        not null references public.ordenes_servicio (id) on delete cascade,
@@ -75,43 +70,40 @@ create table if not exists public.orden_detalle (
     raciones           numeric(14,4) not null check (raciones > 0),
     cantidad_requerida numeric(14,4) not null check (cantidad_requerida > 0),
     unidades_completas integer       not null check (unidades_completas > 0),
-    costo_unitario     integer       not null check (costo_unitario > 0),
+    costo_unitario     integer       not null check (costo_unitario > 0),  -- precio al momento de la orden
     costo_total        numeric(14,2) not null check (costo_total >= 0),
     unique (orden_id, ingrediente_id)
 );
 
--- Una merma por cada línea de detalle (relación 1 a 1).
+-- --- TABLA DE MERMAS ---
 create table if not exists public.mermas (
     id               bigint generated always as identity primary key,
-    orden_detalle_id bigint        not null unique
+    orden_detalle_id bigint        not null unique  -- una merma por cada línea de detalle
                      references public.orden_detalle (id) on delete cascade,
     cantidad_merma   numeric(14,4) not null check (cantidad_merma >= 0),
     perdida          numeric(14,2) not null check (perdida >= 0)
 );
 
+-- --- ÍNDICES DE CONSULTA ---
 create index if not exists idx_ordenes_estado on public.ordenes_servicio (estado, creado_en);
 create index if not exists idx_ordenes_receta on public.ordenes_servicio (receta_id);
 
--- -----------------------------------------------------------------------------
--- 4. FUNCIÓN TRANSACCIONAL
---    Guarda orden + detalle + mermas en UNA sola transacción: si algo falla no
---    queda ningún registro a medias.
--- -----------------------------------------------------------------------------
+-- --- FUNCIÓN PARA GUARDAR UNA ORDEN COMPLETA ---
 create or replace function public.registrar_orden(p_orden jsonb, p_detalle jsonb)
 returns bigint
 language plpgsql
 set search_path = public
 as $$
-declare
+declare  -- variables de trabajo
     v_orden_id   bigint;
     v_detalle_id bigint;
     v_linea      jsonb;
 begin
-    if coalesce(jsonb_array_length(p_detalle), 0) = 0 then
+    if coalesce(jsonb_array_length(p_detalle), 0) = 0 then  -- la orden debe tener detalle
         raise exception 'La orden no tiene detalle de insumos';
     end if;
 
-    insert into ordenes_servicio (receta_id, perfil_id, comensales, costo_total,
+    insert into ordenes_servicio (receta_id, perfil_id, comensales, costo_total,  -- guarda la orden
         costo_por_plato, venta_por_plato, venta_total, perdida_merma, margen)
     values (
         (p_orden->>'receta_id')::integer,
@@ -126,7 +118,7 @@ begin
     )
     returning id into v_orden_id;
 
-    for v_linea in select * from jsonb_array_elements(p_detalle) loop
+    for v_linea in select * from jsonb_array_elements(p_detalle) loop  -- guarda el detalle y la merma de cada ingrediente
         insert into orden_detalle (orden_id, ingrediente_id, raciones,
             cantidad_requerida, unidades_completas, costo_unitario, costo_total)
         values (
@@ -146,17 +138,12 @@ begin
                 (v_linea->>'perdida_merma')::numeric);
     end loop;
 
-    return v_orden_id;
+    return v_orden_id;  -- número de la orden creada
 end;
 $$;
 
--- -----------------------------------------------------------------------------
--- 5. SEGURIDAD
---    RLS activado y SIN políticas: las claves públicas (anon/publishable) no
---    pueden leer ni escribir. Solo el servidor de Streamlit, con la secret key
---    (rol service_role), tiene acceso.
--- -----------------------------------------------------------------------------
-alter table public.perfiles            enable row level security;
+-- --- SEGURIDAD ---
+alter table public.perfiles            enable row level security;  -- sin políticas, la clave pública no tiene acceso
 alter table public.perfil_permisos     enable row level security;
 alter table public.ingredientes        enable row level security;
 alter table public.recetas             enable row level security;
@@ -165,26 +152,25 @@ alter table public.ordenes_servicio    enable row level security;
 alter table public.orden_detalle       enable row level security;
 alter table public.mermas              enable row level security;
 
-grant usage on schema public to service_role;
+grant usage on schema public to service_role;  -- permisos para la clave del servidor
 grant select, insert, update, delete on
     public.perfiles, public.perfil_permisos, public.ingredientes, public.recetas,
     public.receta_ingredientes, public.ordenes_servicio, public.orden_detalle,
     public.mermas
 to service_role;
 
-revoke execute on function public.registrar_orden(jsonb, jsonb) from public, anon, authenticated;
+revoke execute on function public.registrar_orden(jsonb, jsonb) from public, anon, authenticated;  -- bloquea la función al público
 grant execute on function public.registrar_orden(jsonb, jsonb) to service_role;
 
--- -----------------------------------------------------------------------------
--- 6. DATOS INICIALES: PERFILES Y PERMISOS
--- -----------------------------------------------------------------------------
+-- --- DATOS INICIALES: PERFILES ---
 insert into public.perfiles (codigo, nombre, descripcion) values
     ('cocina', 'Cocina', 'Solo funciones operativas: cantidades a preparar.'),
     ('administrador', 'Administrador', 'Acceso total: operación, costos, ventas y mermas.')
 on conflict (codigo) do update
     set nombre = excluded.nombre, descripcion = excluded.descripcion;
 
-delete from public.perfil_permisos;
+-- --- DATOS INICIALES: PERMISOS ---
+delete from public.perfil_permisos;  -- reemplaza los permisos anteriores
 insert into public.perfil_permisos (perfil_id, vista)
 select p.id, v.vista
 from (values
@@ -201,10 +187,7 @@ from (values
 ) as v (perfil, vista)
 join public.perfiles p on p.codigo = v.perfil;
 
--- -----------------------------------------------------------------------------
--- 7. DATOS INICIALES: LOS 10 INGREDIENTES
---    rendimiento = columna "Utilidad". Cebolla: 4 personas (indicación del encargo).
--- -----------------------------------------------------------------------------
+-- --- DATOS INICIALES: INGREDIENTES ---
 insert into public.ingredientes
     (nombre, costo_unitario, rendimiento, unidad_compra, unidad_compra_plural,
      pieza_entera, nombre_racion)
@@ -219,7 +202,7 @@ values
     ('Lechuga',      1000, 10, 'lechuga',               'lechugas',                 false, 'porciones'),
     ('Huevo',        4500, 12, 'empaque (12 huevos)',   'empaques (12 huevos c/u)', true,  'huevos'),
     ('Aceite',       1000, 10, 'litro',                 'litros',                   false, 'porciones')
-on conflict (nombre) do update set
+on conflict (nombre) do update set  -- actualiza si ya existe
     costo_unitario       = excluded.costo_unitario,
     rendimiento          = excluded.rendimiento,
     unidad_compra        = excluded.unidad_compra,
@@ -227,9 +210,7 @@ on conflict (nombre) do update set
     pieza_entera         = excluded.pieza_entera,
     nombre_racion        = excluded.nombre_racion;
 
--- -----------------------------------------------------------------------------
--- 8. DATOS INICIALES: LAS 10 RECETAS (base 4 comensales)
--- -----------------------------------------------------------------------------
+-- --- DATOS INICIALES: RECETAS ---
 insert into public.recetas (nombre) values
     ('Arroz con Pollo y Ensalada'),
     ('Carne Molida con Papas'),
@@ -243,6 +224,7 @@ insert into public.recetas (nombre) values
     ('Arroz Graneado con Huevo y Cebolla')
 on conflict (nombre) do nothing;
 
+-- --- DATOS INICIALES: INGREDIENTES DE CADA RECETA (base 4 comensales) ---
 insert into public.receta_ingredientes
     (receta_id, ingrediente_id, posicion, raciones_base, texto_receta)
 select r.id, i.id, v.posicion, v.raciones, v.texto
@@ -299,18 +281,17 @@ from (values
 ) as v (receta, ingrediente, posicion, raciones, texto)
 join public.recetas r      on r.nombre = v.receta
 join public.ingredientes i on i.nombre = v.ingrediente
-on conflict (receta_id, ingrediente_id) do update set
+on conflict (receta_id, ingrediente_id) do update set  -- actualiza si ya existe
     posicion      = excluded.posicion,
     raciones_base = excluded.raciones_base,
     texto_receta  = excluded.texto_receta;
 
-commit;
+commit;  -- confirma todos los cambios
 
--- Hace que la API de Supabase reconozca de inmediato las tablas y la función.
-notify pgrst, 'reload schema';
+-- --- ACTUALIZACIÓN DE LA API Y VERIFICACIÓN ---
+notify pgrst, 'reload schema';  -- recarga el esquema de la API
 
--- Verificación: debe mostrar 2 perfiles, 10 ingredientes, 10 recetas y 40 líneas.
-select (select count(*) from public.perfiles)            as perfiles,
+select (select count(*) from public.perfiles)            as perfiles,  -- muestra la cantidad de registros cargados
        (select count(*) from public.ingredientes)        as ingredientes,
        (select count(*) from public.recetas)             as recetas,
        (select count(*) from public.receta_ingredientes) as lineas_receta;
