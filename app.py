@@ -8,6 +8,8 @@
  Profesor     : Dr. Carlos Santibáñez Rodríguez
  Evaluación   : N°3  -  Fecha: 26-11-2026
  Librerías    : streamlit 1.67, supabase 2.34, pandas 3.1, altair 6.3, tzdata
+                Estándar: math, fractions, decimal, dataclasses, datetime,
+                zoneinfo, json, os, tempfile, contextlib, typing, unicodedata
  Ejecución    : streamlit run app.py
  Descripción  : Identificación por perfil y navegación según permisos.
 
@@ -42,6 +44,7 @@ VISTAS = {
 }
 
 
+# Pantalla inicial: una tarjeta por perfil, sin contraseña.
 def pantalla_identificacion(perfiles: list) -> None:
     st.title("Sistema de Inventario y Gestión de Mermas")
     st.write("Seleccione su perfil para ingresar.")
@@ -58,11 +61,13 @@ def pantalla_identificacion(perfiles: list) -> None:
                 st.rerun()
 
 
+# Sale del perfil actual y vuelve a la pantalla de ingreso.
 def cerrar_sesion() -> None:
     # Se borra todo el estado para no traspasar información entre perfiles.
     st.session_state.clear()
 
 
+# Función principal: identifica el perfil y construye su navegación.
 def main() -> None:
     with manejar_errores("conectar con la base de datos"):
         perfiles = cargar_perfiles()
@@ -70,6 +75,7 @@ def main() -> None:
         st.error("No hay perfiles cargados. Ejecute sql/supabase_setup.sql en Supabase.")
         return
 
+    # Se comprueba si ya hay un perfil válido en la sesión.
     perfil = buscar_perfil(perfiles, st.session_state.get("perfil"))
     if perfil is None:
         # Con navegación oculta, una URL escrita a mano no abre ninguna vista.
@@ -85,6 +91,7 @@ def main() -> None:
         st.button("Cambiar de perfil", on_click=cerrar_sesion)
         return
 
+    # El menú lateral se arma agrupado por sección.
     menu: dict = {}
     for posicion, codigo in enumerate(permitidas):
         funcion, titulo, seccion, ruta = VISTAS[codigo]

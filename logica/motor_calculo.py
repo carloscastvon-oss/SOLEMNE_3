@@ -1,48 +1,11 @@
-"""
-===============================================================================
- Archivo      : logica/motor_calculo.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : math, fractions, decimal (biblioteca estándar)
- Descripción  : Motor de cálculo de insumos indivisibles, merma y precios.
-                No depende de Streamlit ni de Supabase (se puede probar solo).
-
- FÓRMULAS (para cada ingrediente de la receta, con N comensales)
-   raciones            = raciones_base * N / 4
-                         (si es pieza entera: ceil(raciones))
-   cantidad_requerida  = raciones / rendimiento        [unidades de compra]
-   unidades_completas  = math.ceil(cantidad_requerida) [producto indivisible]
-   merma_fisica        = unidades_completas - cantidad_requerida
-   costo               = unidades_completas * costo_unitario
-   perdida_merma       = merma_fisica * costo_unitario
- TOTALES DE LA ORDEN
-   costo_total         = suma de costos
-   costo_por_plato     = costo_total / N
-   venta_por_plato     = costo_por_plato * 1,25
-   venta_total         = costo_total * 1,25
-
- DECISIONES DE TRABAJO
-   * La tabla de "Utilidad" del enunciado define cuántas personas cubre cada
-     unidad de compra. Por indicación del encargo, la cebolla rinde 4 personas.
-   * El huevo es la excepción con cantidad propia por receta (6 ó 4 por cada 4
-     comensales), porque el empaque trae 12 unidades contables.
-   * Se usa Fraction y no float: con float, 0.1+0.2 != 0.3, y un error mínimo
-     podría hacer que math.ceil compre una unidad de más.
-   * Los productos abiertos no se guardan: la merma se calcula POR ORDEN y no
-     se reutiliza en órdenes posteriores.
-===============================================================================
-"""
-
 import math
 from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 
 from modelos.entidades import DetalleInsumo, ItemReceta, Receta, ResultadoCalculo
 
+# Se usa Fraction y no float: un error mínimo de decimales podría hacer que
+# math.ceil compre una unidad de más.
 MARGEN_GANANCIA = Fraction(25, 100)  # 25% sobre el costo
 MAX_COMENSALES = 10_000              # tope para detectar errores de digitación
 
@@ -74,9 +37,19 @@ def a_pesos(valor: Fraction) -> Decimal:
     return exacto.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+# Fórmulas por ingrediente, con N comensales:
+#   raciones           = raciones_base * N / 4  (pieza entera: ceil)
+#   cantidad_requerida = raciones / rendimiento      (unidades de compra)
+#   unidades_completas = math.ceil(cantidad_requerida)
+#   merma_fisica       = unidades_completas - cantidad_requerida
+#   perdida_merma      = merma_fisica * costo_unitario
+# El rendimiento sale de la columna "Utilidad" (cebolla: 4 personas, según el
+# encargo). El huevo tiene cantidad propia por receta (empaque de 12 contables).
+# Lo abierto no se guarda: la merma se calcula por orden y no se reutiliza.
 def calcular_insumo(item: ItemReceta, comensales: int, comensales_base: int) -> DetalleInsumo:
     """Aplica las fórmulas de requerimiento, indivisibilidad y merma."""
     ingrediente = item.ingrediente
+    # Se escala la receta base a la cantidad real de comensales.
     raciones = Fraction(item.raciones_base * comensales, comensales_base)
     if ingrediente.pieza_entera:
         raciones = Fraction(math.ceil(raciones))
@@ -102,9 +75,11 @@ def calcular_orden(receta: Receta, comensales) -> ResultadoCalculo:
     if len(receta.items) == 0:
         raise ErrorValidacion(f"La receta '{receta.nombre}' no tiene ingredientes.")
 
+    # Se calcula cada ingrediente por separado.
     detalles = tuple(
         calcular_insumo(item, comensales, receta.comensales_base) for item in receta.items
     )
+    # Se cuesta lo comprado completo, aunque no se consuma todo.
     costo_total = sum((d.costo_total for d in detalles), Decimal("0"))
     # Se suman las pérdidas ya redondeadas para que el total cuadre con el detalle.
     perdida = sum((d.perdida_merma for d in detalles), Decimal("0"))

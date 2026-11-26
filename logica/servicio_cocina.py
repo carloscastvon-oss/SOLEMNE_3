@@ -1,24 +1,10 @@
-"""
-===============================================================================
- Archivo      : logica/servicio_cocina.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : solo módulos del proyecto
- Descripción  : Casos de uso de cocina. Todo lo que sale de este módulo hacia
-                la interfaz es una OrdenPreparacion, sin datos financieros.
-===============================================================================
-"""
-
 from estructuras.tda import Cola
 from logica.formato import cantidad
 from logica.motor_calculo import calcular_orden
 from modelos.entidades import Ingrediente, LineaPreparacion, OrdenPreparacion, Receta
 
 
+# Traduce un cálculo a la línea que lee cocina: solo cantidades.
 def crear_linea(ingrediente: Ingrediente, raciones, unidades: int) -> LineaPreparacion:
     nombre_racion = ingrediente.nombre_racion
     # Singular: "1 porción", "1 huevo", "1 tuto".
@@ -33,6 +19,7 @@ def crear_linea(ingrediente: Ingrediente, raciones, unidades: int) -> LineaPrepa
 def solicitar_servicio(repositorio, receta: Receta, comensales, perfil: str) -> OrdenPreparacion:
     """Valida, calcula, guarda en Supabase y retorna solo la vista operativa."""
     resultado = calcular_orden(receta, comensales)  # lanza ErrorValidacion
+    # Se guardan todos los cálculos, aunque cocina no los vea.
     numero = repositorio.registrar_orden(resultado, perfil)
     return OrdenPreparacion(
         numero=numero,
@@ -50,6 +37,7 @@ def cola_de_pendientes(filas: list, ingredientes: list) -> Cola:
     Encola las órdenes pendientes en orden de llegada: la cocina atiende primero
     la más antigua (FIFO).
     """
+    # Índice para recuperar el ingrediente por su identificador.
     por_id = {i.id: i for i in ingredientes}
     cola: Cola = Cola()
     for fila in filas:

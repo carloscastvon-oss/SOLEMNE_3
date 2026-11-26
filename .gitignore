@@ -10,3 +10,9 @@ __pycache__/
 
 # Enunciado de la evaluación (documento de la institución, no es código)
 *.pdf
+
+# Respaldo local de versiones anteriores
+*.zip
+
+# Contiene las claves de Supabase
+NOTAS CRDCLS.txt

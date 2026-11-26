@@ -1,23 +1,11 @@
-"""
-===============================================================================
- Archivo      : datos/conexion.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : os, streamlit, supabase
- Descripción  : Conexión a Supabase con manejo seguro de credenciales. Las
-                claves NUNCA se escriben en el código: se leen desde
-                .streamlit/secrets.toml (st.secrets) o variables de entorno.
-===============================================================================
-"""
-
 import os
 
 import streamlit as st
 from supabase import Client, create_client
+
+
+# Las claves nunca se escriben en el código: se leen desde st.secrets
+# (.streamlit/secrets.toml) o desde variables de entorno.
 
 
 class ErrorConfiguracion(RuntimeError):

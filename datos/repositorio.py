@@ -1,21 +1,8 @@
-"""
-===============================================================================
- Archivo      : datos/repositorio.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : datetime, supabase
- Descripción  : ÚNICA capa que consulta la base de datos. La interfaz y la
-                lógica no escriben consultas.
-===============================================================================
-"""
-
 from datetime import datetime, timezone
 
 from modelos.entidades import Ingrediente, ItemReceta, Receta, ResultadoCalculo
+
+# Esta es la única capa que consulta la base de datos.
 
 # La API de Supabase entrega como máximo 1000 filas por consulta.
 TAM_PAGINA = 1000
@@ -37,11 +24,14 @@ COLUMNAS_ADMIN = (
 )
 
 
+# Agrupa todas las lecturas y escrituras en Supabase.
 class Repositorio:
+    # Recibe el cliente de Supabase (facilita probar con uno simulado).
     def __init__(self, cliente):
         self._db = cliente
 
     # ------------------------------------------------------------- Perfiles
+    # Perfiles junto con las vistas que cada uno puede abrir.
     def obtener_perfiles(self) -> list[dict]:
         filas = (
             self._db.table("perfiles")
@@ -61,6 +51,7 @@ class Repositorio:
         ]
 
     # ------------------------------------------------------------- Catálogo
+    # Cada fila se convierte en un objeto Ingrediente.
     def obtener_ingredientes(self) -> list[Ingrediente]:
         filas = self._db.table("ingredientes").select("*").order("id").execute().data
         return [Ingrediente(**fila) for fila in filas]

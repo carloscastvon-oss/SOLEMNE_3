@@ -1,28 +1,3 @@
-"""
-===============================================================================
- Archivo      : algoritmos/ordenamiento.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : json, os, tempfile (biblioteca estándar)
- Descripción  : Algoritmos de ordenamiento implementados a mano (no se usa
-                sorted() ni list.sort()):
-                  - INTERNOS : QuickSort y MergeSort (todo en memoria RAM).
-                  - EXTERNO  : Mezcla externa (external merge sort) usando
-                    archivos temporales en disco.
-
- Criterio de elección:
-   * QuickSort : rápido en promedio O(n log n) y casi sin memoria extra.
-                 No es estable (puede alterar el orden entre empates).
-   * MergeSort : O(n log n) garantizado y estable; usa memoria O(n).
-   * Externo   : para historiales que no caben en memoria; solo se mantiene en
-                 RAM un bloque y un registro por cada archivo que se fusiona.
-===============================================================================
-"""
-
 import json
 import os
 import tempfile
@@ -30,7 +5,15 @@ from typing import Any, Callable, Iterable, Iterator
 
 from estructuras.tda import ColaPrioridad, Pila
 
+# Función que indica por qué dato se ordena cada elemento.
 Clave = Callable[[Any], Any]
+
+
+# Algoritmos implementados a mano. Criterio de elección:
+#   QuickSort : O(n log n) en promedio y poca memoria extra; no es estable.
+#   MergeSort : O(n log n) garantizado y estable; usa memoria O(n).
+#   Externo   : para historiales que no caben en memoria; ordena por bloques en
+#               disco y en la mezcla mantiene un registro por archivo.
 
 
 def _va_antes(a, b, clave: Clave, descendente: bool) -> bool:
@@ -58,6 +41,7 @@ def quicksort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
             continue
         pivote = arreglo[(inicio + fin) // 2]
         i, j = inicio, fin
+        # Partición: lo que va antes del pivote queda a la izquierda.
         while i <= j:
             while _va_antes(arreglo[i], pivote, clave, descendente):
                 i += 1
@@ -67,6 +51,7 @@ def quicksort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
                 arreglo[i], arreglo[j] = arreglo[j], arreglo[i]
                 i += 1
                 j -= 1
+        # Las dos mitades quedan pendientes de ordenar.
         pendientes.apilar((inicio, j))
         pendientes.apilar((i, fin))
     return arreglo
@@ -75,6 +60,7 @@ def quicksort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
 def mergesort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
     """MergeSort recursivo y estable: divide en mitades y luego las mezcla."""
     arreglo = list(datos)
+    # Caso base de la recursión.
     if len(arreglo) <= 1:
         return arreglo
     medio = len(arreglo) // 2
@@ -90,6 +76,7 @@ def mergesort(datos: Iterable, clave: Clave, descendente: bool = False) -> list:
         else:
             resultado.append(izquierda[i])
             i += 1
+    # Se agrega lo que haya sobrado de alguna de las dos mitades.
     resultado.extend(izquierda[i:])
     resultado.extend(derecha[j:])
     return resultado
@@ -142,16 +129,20 @@ class _Invertible:
 
     __slots__ = ("valor", "invertir")
 
+    # Guarda la clave y si el orden debe invertirse.
     def __init__(self, valor, invertir: bool):
         self.valor = valor
         self.invertir = invertir
 
+    # "Menor que", invertido cuando el orden es descendente.
     def __lt__(self, otro):
         return otro.valor < self.valor if self.invertir else self.valor < otro.valor
 
+    # "Mayor que" se define a partir de "menor que".
     def __gt__(self, otro):
         return otro.__lt__(self)
 
+    # Dos claves son iguales si sus valores lo son.
     def __eq__(self, otro):
         return self.valor == otro.valor
 
@@ -173,6 +164,7 @@ def ordenamiento_externo(
     automáticamente al finalizar, incluso si ocurre un error.
     Se retorna una lista porque la interfaz necesita mostrar la tabla completa.
     """
+    # Validación de parámetros para evitar ciclos sin avance.
     if tam_bloque < 1 or max_archivos < 2:
         raise ValueError("tam_bloque debe ser >= 1 y max_archivos >= 2")
 

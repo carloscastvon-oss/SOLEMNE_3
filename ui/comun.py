@@ -1,18 +1,3 @@
-"""
-===============================================================================
- Archivo      : ui/comun.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : streamlit, pandas
- Descripción  : Elementos compartidos por las vistas: repositorio, caché del
-                catálogo y manejo uniforme de errores.
-===============================================================================
-"""
-
 from contextlib import contextmanager
 
 import pandas as pd
@@ -22,6 +7,7 @@ from datos.conexion import obtener_cliente
 from datos.repositorio import Repositorio
 
 
+# Punto único para crear el acceso a los datos.
 def obtener_repositorio() -> Repositorio:
     return Repositorio(obtener_cliente())
 
@@ -33,6 +19,7 @@ def cargar_perfiles() -> list:
     return obtener_repositorio().obtener_perfiles()
 
 
+# Ingredientes y recetas se cargan juntos, porque las recetas los referencian.
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_catalogo() -> tuple:
     repositorio = obtener_repositorio()

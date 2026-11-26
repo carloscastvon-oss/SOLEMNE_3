@@ -1,18 +1,3 @@
--- =============================================================================
---  Archivo      : sql/supabase_setup.sql
---  Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
---  Alumno       : [NOMBRE DEL ALUMNO]
---  Curso        : I CRIM Sistemas de Armas - Programación Avanzada
---  Institución  : Academia Politécnica Militar
---  Profesor     : Dr. Carlos Santibáñez Rodríguez
---  Evaluación   : N°3  -  Fecha: 26-11-2026
---  Descripción  : Crea las tablas relacionales, la seguridad, la función de
---                 registro y carga los datos iniciales.
---  Cómo usarlo  : Supabase > SQL Editor > New query > pegar TODO > Run.
---  Nota         : Se puede ejecutar varias veces: no borra órdenes y deja el
---                 catálogo igual al definido en este archivo.
--- =============================================================================
-
 begin;
 
 -- -----------------------------------------------------------------------------

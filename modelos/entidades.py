@@ -1,18 +1,3 @@
-"""
-===============================================================================
- Archivo      : modelos/entidades.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : dataclasses, decimal, fractions (biblioteca estándar)
- Descripción  : Clases del dominio: ingredientes, recetas, resultado de una
-                orden y la vista "segura" que recibe el perfil cocina.
-===============================================================================
-"""
-
 from dataclasses import dataclass, field
 from decimal import Decimal
 from fractions import Fraction
@@ -45,6 +30,7 @@ class ItemReceta:
     texto_receta: str            # cantidad tal como aparece en el recetario
 
 
+# Menú del recetario; es modificable porque sus ítems se agregan al cargarlo.
 @dataclass
 class Receta:
     id: int
@@ -53,6 +39,7 @@ class Receta:
     # TDA lista enlazada: los ítems se recorren en el orden del recetario.
     items: ListaEnlazada = field(default_factory=ListaEnlazada)
 
+    # Añade un ingrediente al final de la lista enlazada.
     def agregar_item(self, item: ItemReceta) -> None:
         self.items.agregar(item)
 

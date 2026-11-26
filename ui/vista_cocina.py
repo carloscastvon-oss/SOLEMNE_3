@@ -1,18 +1,3 @@
-"""
-===============================================================================
- Archivo      : ui/vista_cocina.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : streamlit
- Descripción  : Interfaz operativa de cocina. NINGUNA pantalla de este archivo
-                muestra costos, precios, sobrantes ni pérdidas.
-===============================================================================
-"""
-
 import streamlit as st
 
 from algoritmos.busqueda import buscar_por_nombre, busqueda_secuencial
@@ -23,6 +8,10 @@ from logica.servicio_cocina import cola_de_pendientes, solicitar_servicio
 from ui.comun import cargar_catalogo, manejar_errores, obtener_repositorio, tabla
 
 
+# Ninguna pantalla de cocina muestra costos, precios, sobrantes ni pérdidas.
+
+
+# Tabla de preparación reutilizada en las pantallas de cocina.
 def _mostrar_orden(orden) -> None:
     tabla(
         [vars(linea) for linea in orden.lineas],
@@ -34,6 +23,7 @@ def _mostrar_orden(orden) -> None:
     )
 
 
+# --- Pantalla: formulario de solicitud de servicio ---
 def pagina_nueva_preparacion() -> None:
     st.title("Nueva preparación")
     with manejar_errores("cargar el catálogo"):
@@ -57,6 +47,7 @@ def pagina_nueva_preparacion() -> None:
         )
         enviado = st.form_submit_button("Generar orden de preparación", type="primary")
 
+    # Primero se valida; solo con datos correctos se calcula y guarda.
     if enviado:
         receta = busqueda_secuencial(recetas, lambda r: r.nombre == nombre)
         try:
@@ -73,6 +64,7 @@ def pagina_nueva_preparacion() -> None:
             historial.apilar(orden)
             st.toast(f"Orden N° {orden.numero} guardada en Supabase")
 
+    # Sin órdenes en la sesión solo se muestran las instrucciones.
     if historial.esta_vacia():
         st.info("Seleccione un menú e ingrese los comensales para generar la orden.")
         return
@@ -96,6 +88,7 @@ def pagina_nueva_preparacion() -> None:
                 _mostrar_orden(orden)
 
 
+# --- Pantalla: cola de órdenes pendientes ---
 def pagina_ordenes_cocina() -> None:
     st.title("Órdenes pendientes")
     st.caption("Se atienden en orden de llegada (cola FIFO: la más antigua primero).")
@@ -105,6 +98,7 @@ def pagina_ordenes_cocina() -> None:
         ingredientes, _ = cargar_catalogo()
         cola = cola_de_pendientes(repositorio.ordenes_cocina_pendientes(), ingredientes)
 
+    # El aviso se guarda en la sesión para que sobreviva a la recarga.
     if mensaje := st.session_state.pop("aviso_cola", None):
         st.success(mensaje)
     if cola.esta_vacia():
@@ -112,6 +106,7 @@ def pagina_ordenes_cocina() -> None:
         return
 
     st.metric("Órdenes en espera", len(cola))
+    # Solo la primera de la cola se puede marcar como preparada.
     siguiente = cola.desencolar()
     with st.container(border=True):
         st.subheader(f"Siguiente: N° {siguiente.numero} · {siguiente.menu}")
@@ -139,6 +134,7 @@ def pagina_ordenes_cocina() -> None:
             posicion += 1
 
 
+# --- Pantalla: consulta de insumos sin costos ---
 def pagina_consulta_insumos() -> None:
     st.title("Consulta de insumos")
     with manejar_errores("cargar el catálogo"):
@@ -150,6 +146,7 @@ def pagina_consulta_insumos() -> None:
         st.warning("No se encontraron insumos con ese nombre.")
         return
 
+    # Para cada insumo encontrado se buscan los menús que lo utilizan.
     filas = []
     for ingrediente in encontrados:
         menus = [

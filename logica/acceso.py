@@ -1,25 +1,13 @@
-"""
-===============================================================================
- Archivo      : logica/acceso.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : solo módulos del proyecto
- Descripción  : Validación de acceso por PERFIL usando búsqueda secuencial.
-                Por alcance del encargo no se gestionan contraseñas: la persona
-                se identifica eligiendo su perfil. Los permisos de cada perfil
-                están en la tabla perfil_permisos de Supabase.
-===============================================================================
-"""
-
 from typing import Optional
 
 from algoritmos.busqueda import busqueda_secuencial
 
 
+# Por alcance del encargo no hay contraseñas: la persona elige su perfil. Los
+# permisos de cada perfil están en la tabla perfil_permisos de Supabase.
+
+
+# Busca secuencialmente el perfil por su código.
 def buscar_perfil(perfiles: list, codigo: Optional[str]) -> Optional[dict]:
     return busqueda_secuencial(perfiles, lambda p: p["codigo"] == codigo)
 

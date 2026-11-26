@@ -1,17 +1,3 @@
-"""
-===============================================================================
- Archivo      : tests/test_sistema.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : unittest, random, dataclasses (biblioteca estándar)
- Ejecución    : python -m unittest discover -s tests -t .
- Descripción  : Pruebas del motor de cálculo, los TDA, los algoritmos y la
-                protección de datos financieros hacia cocina.
-===============================================================================
-"""
-
 import math
 import random
 import unittest

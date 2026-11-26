@@ -1,18 +1,3 @@
-"""
-===============================================================================
- Archivo      : ui/vista_admin.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : streamlit, pandas, altair
- Descripción  : Panel gerencial del administrador: KPIs, historial filtrable y
-                análisis de desechos e impacto económico.
-===============================================================================
-"""
-
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -36,11 +21,13 @@ CAMPOS_ORDEN = {
 }
 
 
+# Lee las órdenes en cada visita para mostrar datos actuales.
 def _cargar_registros() -> list:
     with manejar_errores("consultar el historial"):
         return reportes.aplanar_ordenes(obtener_repositorio().ordenes_completas())
 
 
+# Formato de porcentaje con un decimal.
 def _porcentaje(valor) -> str:
     return f"{numero(valor, 1)} %"
 
@@ -70,17 +57,20 @@ def _grafico_barras(filas: list, categoria: str, valor: str, titulo_valor: str) 
 # ---------------------------------------------------------------------------
 # 1. Resumen ejecutivo
 # ---------------------------------------------------------------------------
+# --- Pantalla: KPIs globales ---
 def pagina_resumen() -> None:
     st.title("Resumen ejecutivo")
     registros = _cargar_registros()
     kpis = reportes.calcular_kpis(registros)
 
+    # Fila de indicadores principales.
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Servicios realizados", numero(kpis["servicios"], 0), border=True)
     c2.metric("Costo total de operación", pesos(kpis["costo_total"]), border=True)
     c3.metric("Pérdida total por merma", pesos(kpis["perdida_merma"]), border=True)
     c4.metric("Ingresos proyectados", pesos(kpis["ingresos"]), border=True)
 
+    # Indicadores complementarios.
     c5, c6, c7 = st.columns(3)
     c5.metric("Comensales atendidos", numero(kpis["comensales"], 0), border=True)
     c6.metric("Ganancia proyectada (25 %)", pesos(kpis["ganancia"]), border=True)
@@ -103,6 +93,7 @@ def pagina_resumen() -> None:
 # ---------------------------------------------------------------------------
 # 2. Historial detallado y filtrable
 # ---------------------------------------------------------------------------
+# --- Pantalla: historial filtrable con desglose ---
 def pagina_historial() -> None:
     st.title("Historial de preparaciones")
     registros = _cargar_registros()
@@ -112,6 +103,7 @@ def pagina_historial() -> None:
     with manejar_errores("cargar el catálogo"):
         _, recetas = cargar_catalogo()
 
+    # Controles de filtrado y ordenamiento.
     menus = st.multiselect(
         "Filtrar por tipo de menú", [r.nombre for r in recetas], placeholder="Todos los menús"
     )
@@ -137,6 +129,7 @@ def pagina_historial() -> None:
         st.warning("No hay órdenes que cumplan los filtros.")
         return
 
+    # Se aplica el algoritmo elegido por el administrador.
     llave = CAMPOS_ORDEN[campo]
     opciones = {}
     if METODOS[metodo] is ordenamiento_externo:
@@ -159,6 +152,7 @@ def pagina_historial() -> None:
     m3.metric("Pérdida por merma", pesos(kpis["perdida_merma"]))
     m4.metric("Venta", pesos(kpis["ingresos"]))
 
+    # Columnas visibles y su formato de presentación.
     columnas = {
         "orden": "N°", "fecha": "Fecha", "menu": "Menú", "comensales": "Comensales",
         "costo_total": "Costo total", "costo_por_plato": "Costo por plato",
@@ -178,6 +172,7 @@ def pagina_historial() -> None:
         key=f"historial_{llave}_{sentido}_{metodo}_{menus}_{len(ordenados)}",
     )
 
+    # Exportación CSV con separadores compatibles con Excel en español.
     exportables = pd.DataFrame(ordenados, columns=list(columnas)).rename(columns=columnas)
     st.download_button(
         "Descargar historial filtrado (CSV)",
@@ -186,11 +181,13 @@ def pagina_historial() -> None:
         mime="text/csv",
     )
 
+    # Si hay una fila seleccionada se muestra su detalle.
     filas_marcadas = seleccion.selection.rows
     if filas_marcadas and filas_marcadas[0] < len(ordenados):
         _mostrar_desglose(ordenados[filas_marcadas[0]])
 
 
+# Detalle de una orden: cantidades, costos y merma por ingrediente.
 def _mostrar_desglose(r: dict) -> None:
     st.subheader(f"Desglose orden N° {r['orden']} · {r['menu']}")
     c1, c2, c3, c4 = st.columns(4)
@@ -222,17 +219,20 @@ def _mostrar_desglose(r: dict) -> None:
 # ---------------------------------------------------------------------------
 # 3. Análisis de desechos e impacto económico
 # ---------------------------------------------------------------------------
+# --- Pantalla: desechos e impacto económico ---
 def pagina_analisis_mermas() -> None:
     st.title("Análisis de mermas e impacto económico")
     registros = _cargar_registros()
     with manejar_errores("cargar el catálogo"):
         _, recetas = cargar_catalogo()
 
+    # Una pestaña por cada enfoque del análisis.
     tab_menu, tab_insumo, tab_simulador, tab_relacion = st.tabs(
         ["Por menú", "Por ingrediente", "Comparador de menús", "Relación menú-ingrediente"]
     )
     por_insumo = reportes.ranking_perdidas(reportes.perdida_por_ingrediente(registros))
 
+    # Pestaña 1: qué menús generan más pérdida.
     with tab_menu:
         if not registros:
             st.info("Aún no hay servicios registrados.")
@@ -257,6 +257,7 @@ def pagina_analisis_mermas() -> None:
                 },
             )
 
+    # Pestaña 2: qué ingredientes generan más pérdida.
     with tab_insumo:
         if not por_insumo:
             st.info("Aún no hay servicios registrados.")
@@ -280,6 +281,7 @@ def pagina_analisis_mermas() -> None:
                 },
             )
 
+    # Pestaña 3: comparación de menús antes de comprar.
     with tab_simulador:
         st.caption("Simulación para planificar compras: no guarda órdenes.")
         comensales = st.number_input(
@@ -304,6 +306,7 @@ def pagina_analisis_mermas() -> None:
             },
         )
 
+    # Pestaña 4: a qué menús afecta cada ingrediente (grafo).
     with tab_relacion:
         grafo = reportes.construir_grafo(recetas)
         nombres = [v[1] for v in grafo.vertices() if v[0] == "ingrediente"]
@@ -328,6 +331,7 @@ def pagina_analisis_mermas() -> None:
 # ---------------------------------------------------------------------------
 # 4. Catálogo con costos
 # ---------------------------------------------------------------------------
+# --- Pantalla: catálogo con costos ---
 def pagina_catalogo() -> None:
     st.title("Catálogo de insumos y recetas")
     with manejar_errores("cargar el catálogo"):

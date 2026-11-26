@@ -1,10 +1,3 @@
-"""
- Lee los datos iniciales directamente desde sql/supabase_setup.sql, de modo que
- las pruebas verifican el mismo catálogo que se carga en Supabase.
- Alumno: [NOMBRE DEL ALUMNO] - I CRIM Sistemas de Armas - 26-11-2026
- Librerías: re, pathlib (biblioteca estándar)
-"""
-
 import re
 from pathlib import Path
 

@@ -1,18 +1,3 @@
-"""
-===============================================================================
- Archivo      : logica/reportes.py
- Proyecto     : Sistema de Inventario de Alimentos y Gestión de Mermas
- Alumno       : [NOMBRE DEL ALUMNO]
- Curso        : I CRIM Sistemas de Armas - Programación Avanzada
- Institución  : Academia Politécnica Militar
- Profesor     : Dr. Carlos Santibáñez Rodríguez
- Evaluación   : N°3  -  Fecha: 26-11-2026
- Librerías    : solo módulos del proyecto
- Descripción  : Cálculos del panel gerencial: KPIs, filtros, rankings de
-                pérdida y relación menú-ingrediente. Funciones puras.
-===============================================================================
-"""
-
 from algoritmos.busqueda import busqueda_secuencial_todos
 from estructuras.tda import ArbolBinarioBusqueda, ColaPrioridad, Grafo
 from logica.formato import numero
@@ -46,6 +31,7 @@ def aplanar_ordenes(filas: list) -> list[dict]:
                     "perdida": float(merma["perdida"]),
                 }
             )
+        # Un registro por orden, con su detalle incluido.
         registros.append(
             {
                 "orden": fila["id"],
@@ -91,6 +77,7 @@ def calcular_kpis(registros: list) -> dict:
         kpis["costo_total"] += r["costo_total"]
         kpis["perdida_merma"] += r["perdida_merma"]
         kpis["ingresos"] += r["venta_total"]
+    # Ganancia proyectada: ingresos menos costo de operación.
     kpis["ganancia"] = kpis["ingresos"] - kpis["costo_total"]
     # Se protege la división cuando todavía no hay servicios.
     kpis["porcentaje_merma"] = (
@@ -114,7 +101,9 @@ def filtrar_por_rango_perdida(registros: list, minimo: float, maximo: float) -> 
     return arbol.rango(minimo, maximo)
 
 
+# Pérdida total, promedio y porcentaje de merma de cada menú.
 def perdida_por_menu(registros: list) -> list[dict]:
+    # Agrupa las órdenes por menú y acumula sus montos.
     acumulado: dict = {}
     for r in registros:
         fila = acumulado.setdefault(
@@ -129,7 +118,9 @@ def perdida_por_menu(registros: list) -> list[dict]:
     return list(acumulado.values())
 
 
+# Merma física, dinero perdido y porcentaje de cada ingrediente.
 def perdida_por_ingrediente(registros: list) -> list[dict]:
+    # Agrupa el detalle de todas las órdenes por ingrediente.
     acumulado: dict = {}
     for r in registros:
         for d in r["detalle"]:
@@ -172,6 +163,7 @@ def construir_grafo(recetas: list) -> Grafo:
     return grafo
 
 
+# Los vecinos de un ingrediente en el grafo son los menús que lo usan.
 def menus_que_usan(grafo: Grafo, ingrediente: str) -> list[str]:
     return [nombre for _, nombre in grafo.vecinos(("ingrediente", ingrediente))]
 
